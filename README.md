@@ -1,6 +1,6 @@
 # Gestor documental AFAL
 
-Aplicación estática para GitHub Pages, conectada a Supabase Database, Auth y Storage. El repositorio contiene únicamente el código; el catálogo y los documentos se consultan después de iniciar sesión con un correo habilitado.
+Aplicación estática para GitHub Pages, conectada a Supabase Database, Auth y Storage. El repositorio contiene únicamente el código; el catálogo y los documentos se consultan después de iniciar sesión con el acceso compartido del equipo.
 
 ## Flujo
 
@@ -17,13 +17,13 @@ La cancelación conserva el registro, sus archivos y su historial; libera el nú
 
 Publicar la rama `main`, carpeta raíz, en Settings → Pages. No se necesita compilar. Los archivos `index.html`, `app.js`, `core.js`, `config.js`, `styles.css` y `vendor/` deben conservar sus rutas.
 
-En Supabase → Authentication → URL Configuration, configurar la URL del sitio y permitir el mismo destino de retorno del enlace de acceso. El acceso usa enlaces enviados por Supabase Auth. Si el correo se limita o no llega, revisar la entrega de Auth y configurar el proveedor SMTP de la organización; no incluir sus credenciales en este repositorio.
+En Supabase → Authentication → URL Configuration, configurar la URL del sitio y permitir el mismo destino de retorno del enlace de acceso. El acceso usa correo y contraseña mediante Supabase Auth. No requiere SMTP ni envío de enlaces para iniciar sesión. La contraseña la establece el propietario en Supabase → Authentication → Users → Add user → Create new user; no se incluye en el repositorio. El usuario de la aplicación debe estar confirmado y habilitado en `gd_members`. No cambiar la contraseña del dashboard de Supabase ni de GitHub.
 
 ## Acceso y archivos
 
 - `config.js` contiene únicamente la URL del proyecto y una clave **publishable**, diseñada para el navegador. No colocar claves secretas o `service_role` en el código.
 - El catálogo y el bucket `gd-documentos` son privados. Las políticas de acceso requieren sesión y un correo habilitado en `gd_members`.
-- El alta de correos habilitados se realiza en Supabase por el administrador. La sesión del dashboard de Supabase no sustituye el inicio de sesión en esta aplicación.
+- Se utiliza un único usuario de la aplicación, compartido por las personas que trabajan en el catálogo. El historial identifica esa cuenta común. La sesión del dashboard de Supabase no sustituye el inicio de sesión en esta aplicación.
 - Las tablas expuestas permiten lectura a miembros; las operaciones de escritura pasan por funciones con comprobación de acceso. El código se reserva en PostgreSQL con bloqueo por macroproceso y tipo.
 - Los originales se guardan por identidad interna del registro y del archivo; nunca por un código que pueda reutilizarse.
 - Un fallo o cancelación de carga no marca el registro completo. La ficha permite verificar una carga interrumpida o descartar el intento para volver a cargarla.
