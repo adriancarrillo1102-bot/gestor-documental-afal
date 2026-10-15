@@ -1,5 +1,5 @@
-import {config} from './config.js';
-import {norm,score,tokens,isComplete,status,matchesSearch,localDate,csvCell} from './core.js';
+import {config} from './config.js?v=20261015-compartido-2';
+import {norm,score,tokens,isComplete,status,matchesSearch,localDate,csvCell} from './core.js?v=20261015-compartido-2';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const db=window.supabase.createClient(config.url,config.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 let docs=[],macros=[],types=[],free=[],pending=[],user=null,editing=null,editingRevision=null,current=null,busy=false,requestId=crypto.randomUUID(),toastTimer,viewerUrl,loadGeneration=0;
