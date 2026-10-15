@@ -41,3 +41,10 @@ Los pendientes heredados del Excel se conservan en una lista separada para revis
 ## Dependencia
 
 SDK oficial `@supabase/supabase-js` 2.118.0, incluido en `vendor/`, con licencia y archivo de integridad npm. No se descargan librerías en ejecución desde un CDN.
+
+
+## Ola y procedimientos relacionados
+
+Cada alta solicita Ola 1 a Ola 5. Los registros históricos sin ese dato permanecen como Sin registrar. Primero se da de alta el procedimiento como PRO; después, los demás documentos seleccionan uno o varios PRO existentes. El selector de procedimientos permite elegir su macroproceso, incluyendo vínculos a procedimientos de otros macros. Una sola identidad documental conserva su código y archivos aunque tenga varios procedimientos asociados. La ficha muestra los vínculos en ambos sentidos; la matriz se filtra por ola y procedimiento, y el CSV incluye esas relaciones.
+
+La ola y la lista de identidades de procedimientos se guardan en los metadatos del registro (`meta.wave` y `meta.procedureIds`), bajo las reglas de acceso ya existentes. La aplicación valida que los procedimientos seleccionados estén activos y evita cancelar desde la interfaz un PRO con documentos vinculados. Estos vínculos no son claves foráneas independientes; si se modifica el catálogo directamente por SQL, el administrador debe conservar la integridad de las identidades referenciadas.
