@@ -11,5 +11,6 @@ exec gotenberg \
   --webhook-disable=true \
   --libreoffice-max-queue-size=1 \
   --libreoffice-restart-after=5 \
-  --libreoffice-auto-start=false \
+  --libreoffice-auto-start=true \
+  --libreoffice-start-timeout=60s \
   '--libreoffice-deny-list=.*'
