@@ -1,5 +1,5 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
-import {PDF_LIMIT,isPdf,sourcePath,readBounded} from './pdf-core.mjs';
+import {PDF_LIMIT,isPdf,sourcePath,readBounded,supported} from './pdf-core.mjs';
 const origin='https://adriancarrillo1102-bot.github.io';
 const sha=async(b:Uint8Array)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,OPTIONS','Cache-Control':'no-store'};
@@ -21,7 +21,7 @@ export async function handler(req:Request){
   if(!/^[a-f0-9]{8}-[a-f0-9-]{27}$/i.test(id)||!([sourceHash,pdfHash].every(x=>/^[a-f0-9]{64}$/.test(x)))||!(pdf instanceof File)||pdf.size<5||pdf.size>PDF_LIMIT)return reply({error:'Datos de PDF inválidos'},400);
   const f=await db.from('gd_files').select('*').eq('id',id).eq('state','ready').maybeSingle();if(f.error||!f.data||f.data.sha256!==sourceHash)return reply({error:'El original no coincide con el registro'},409);
   const d=await db.from('gd_documents').select('id,type,code').eq('id',f.data.document_id).is('deleted_at',null).maybeSingle();
-  if(d.error||!d.data||!['FOR','DDS','MAN'].includes(d.data.type))return reply({error:'Documento no disponible para esta carga'},409);
+  if(d.error||!d.data||(d.data.type==='PRO'||!supported(f.data.name)))return reply({error:'Documento no disponible para esta carga'},409);
   const bytes=new Uint8Array(await pdf.arrayBuffer());if(!isPdf(bytes)||await sha(bytes)!==pdfHash)return reply({error:'El PDF no coincide con su huella de verificación'},409);
   const bucket='gd-vistas-pdf',path=sourcePath(f.data),old=await db.storage.from(bucket).download(path);let previousHash=null,backupPath=null;
   if(old.data){
