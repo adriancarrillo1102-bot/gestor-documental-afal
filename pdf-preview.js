@@ -1,5 +1,5 @@
 const pending=new Map();
-export const supportsPdf=name=>/\.(xlsx?|xlsm|docx?|pptx?)$/i.test(name);
+export const supportsPdf=name=>/\.(xlsx?|xlsm|docx?|pptx?|txt)$/i.test(name);
 export async function getPdfPreview(db,fileId,onProgress=()=>{}){
  if(pending.has(fileId))return pending.get(fileId);
  const task=(async()=>{for(let attempt=0;attempt<3;attempt++){
