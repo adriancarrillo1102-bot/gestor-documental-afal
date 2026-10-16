@@ -64,7 +64,7 @@ viewFile=function(id,index=0){const d=docs.find(x=>x.id===id),f=d?.files.filter(
 document.addEventListener('click',e=>{const p=e.target.closest('[data-procedure-file]');if(p){showProcedureDocument(p.dataset.procedureFile);return}const sheet=e.target.closest('[data-sheet][data-reader]');if(sheet){const ctx=readerContexts.get(sheet.dataset.reader);if(ctx){ctx.sheet=Number(sheet.dataset.sheet);renderReader(sheet.dataset.reader)}}});
 $('statsOpen').onclick=()=>renderStats();$('proceduresTab').onclick=()=>setView('procedures');$('catalogTab').onclick=()=>setView('catalog');$('procedureSearch').oninput=()=>{procQuery=$('procedureSearch').value;updateProcedureSelection()};$('clearProcedureFilters').onclick=()=>{procQuery='';procMacro='';$('procedureSearch').value='';updateProcedureSelection()};
 
-const db=window.supabase.createClient(config.url,config.publishableKey);
+const db=window.supabase.createClient(config.url,config.publishableKey,{global:{fetch:(url,options)=>fetch(url,{...options,cache:"no-store"})}});
 let user=null,links=[],mutationBusy=false,editorRevision=null,createRequest=crypto.randomUUID(),refreshToken=0;
 const blobUrls=new Map(),readerTokens=new Map();
 async function rpc(name,args={}){const r=await db.rpc(name,args);if(r.error)throw r.error;return r.data}
