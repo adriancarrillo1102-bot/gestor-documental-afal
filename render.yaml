@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: afal-convertidor-pdf
+    runtime: docker
+    plan: free
+    dockerfilePath: ./converter/Dockerfile
+    dockerContext: ./converter
+    autoDeployTrigger: "off"
+    envVars:
+      - key: GOTENBERG_API_BASIC_AUTH_USERNAME
+        value: afal-converter
+      - key: GOTENBERG_API_BASIC_AUTH_PASSWORD
+        generateValue: true
