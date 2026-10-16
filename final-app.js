@@ -1,6 +1,7 @@
 import {config} from './config.js';
 import {getPdfPreview,supportsPdf} from './pdf-preview.js?v=20261016-1';
-import {chooseConsultation,validatePairSelection} from './document-files.js?v=20261016-final-1';
+import {getManualPdf,consultationPath,validatePairSelection} from './document-files.js?v=20261016-final-2';
+let viewFile;
 'use strict';
 const $=id=>document.getElementById(id),D={docs:[],macros:[],types:[],free:{},high:{}},C=window.PreviewCore;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -72,7 +73,7 @@ function applyRole(){ $('roleName').textContent=role==='admin'?'Administrador':'
 async function refreshCloud(){
  if(user?.email?.toLowerCase()==='aleyva@afal.mx')await rpc('gd_activate_roles');
  const token=++refreshToken;if(!await rpc('gd_is_member'))throw Error('Acceso no habilitado para este correo.');
- const r=await Promise.all([allRows('gd_documents',q=>q.is('deleted_at',null).order('code')),allRows('gd_files',q=>q.order('created_at')),allRows('gd_macros',q=>q.order('id')),allRows('gd_types',q=>q.order('id')),allRows('gd_file_links'),db.from('gd_members').select('*').eq('email',user.email.toLowerCase()).single()]);
+ const r=await Promise.all([allRows('gd_documents',q=>q.is('deleted_at',null).order('code')),allRows('gd_files',q=>q.order('created_at')),allRows('gd_macros',q=>q.order('id')),allRows('gd_types',q=>q.order('id')),allRows('gd_pdf_consultations'),db.from('gd_members').select('*').eq('email',user.email.toLowerCase()).single()]);
  if(token!==refreshToken||!user)return;if(r[5].error)throw r[5].error;
  const [raw,files,macros,types,pairs,member]=r;links=pairs;D.macros=macros;D.types=types;docs=raw.map(d=>({...d,files:files.filter(f=>f.document_id===d.id)}));D.docs=docs;role=member.data.role||'viewer';
  $('appShell').hidden=false;$('loginCard').hidden=true;$('logoutDemo').hidden=false;$('syncTime').textContent='Actualizado '+new Date().toLocaleString('es-MX',{timeZone:'America/Tijuana'});$('roleName').title=user.email;
@@ -91,19 +92,26 @@ function openUpload(id){if(role!=='admin'||mutationBusy)return;const d=docs.find
  const n=Math.max(0,...ready.map(f=>/^\d+$/.test(f.version)?Number(f.version):0));$('uploadVersion').value=ready.length?String(n+1).padStart(2,'0'):(d.meta.version==='Sin identificar'?'01':d.meta.version||'01');$('originalLabel').textContent=d.type==='PRO'?'Excel original o PDF final':'Archivo original';$('uploadDialog').showModal();
 }
 $('existingSource').onchange=()=>{const f=docs.find(d=>d.id===uploadId)?.files.find(f=>f.id===$('existingSource').value);$('uploadFile').disabled=!!f;$('uploadFile').required=!f&&docs.find(d=>d.id===uploadId)?.type!=='PRO';$('uploadVersion').readOnly=!!f;if(f){$('uploadFile').value='';$('uploadVersion').value=f.version}};
-async function uploadOne(documentId,file,version){
+async function uploadOne(documentId,file,version,sourceId=null){
  const bytes=await file.arrayBuffer(),hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
  if(/\.pdf$/i.test(file.name)&&new TextDecoder().decode(bytes.slice(0,5))!=='%PDF-')throw Error('El archivo seleccionado no contiene un PDF válido.');
  const match=docs.flatMap(d=>d.files.map(f=>({...f,doc:d}))).find(f=>f.sha256===hash&&['ready','pending'].includes(f.state));
- if(match){if(match.doc.id===documentId&&match.version===version&&match.state==='ready')return match;if(match.doc.id===documentId&&match.version===version&&match.created_by===user.id){await rpc('gd_finish_upload',{p_file:match.id});return {...match,state:'ready'}}throw Error('Este archivo ya está registrado en '+match.doc.code)}
+ if(match){if(match.doc.id===documentId&&match.version===version&&(!sourceId||match.source_file_id===sourceId)){if(match.state==='ready')return match;if(match.created_by===user.id){await rpc('gd_finish_upload',{p_file:match.id});return {...match,state:'ready'}}}throw Error('Este archivo ya está registrado en '+match.doc.code)}
  const mime=/\.pdf$/i.test(file.name)?'application/pdf':file.type||'application/octet-stream',r=await rpc('gd_begin_upload',{p_id:documentId,p_name:file.name,p_hash:hash,p_size:file.size,p_mime:mime,p_version:version}),f=Array.isArray(r)?r[0]:r;
  const result=await db.storage.from(config.bucket).upload(f.storage_path,file,{contentType:mime,upsert:false});if(result.error)throw Error('Carga pendiente de confirmar: '+result.error.message);await rpc('gd_finish_upload',{p_file:f.id});return {...f,state:'ready'};
+}
+async function uploadManualPdf(source,file){
+ const bytes=await file.arrayBuffer();if(new TextDecoder().decode(bytes.slice(0,5))!=='%PDF-')throw Error('Selecciona un PDF válido.');if(file.size>30*1048576)throw Error('El PDF de consulta admite hasta 30 MB.');
+ const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join(''),path=consultationPath(source);
+ const r=await db.storage.from('gd-vistas-pdf').upload(path,file,{contentType:'application/pdf',upsert:false});
+ if(r.error){const previous=await db.storage.from('gd-vistas-pdf').download(path);if(previous.error)throw r.error;const oldHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await previous.data.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('');if(oldHash!==hash)throw Error('Este original ya tiene otro PDF. Carga una nueva versión para reemplazarlo.');}
+ await rpc('gd_finish_consultation',{p_source:source.id,p_hash:hash});
 }
 async function uploadCloud(e){e.preventDefault();if(role!=='admin'||mutationBusy)return;const d=docs.find(d=>d.id===uploadId),version=$('uploadVersion').value.trim(),existing=d.files.find(f=>f.id===$('existingSource').value),original=$('uploadFile').disabled?null:$('uploadFile').files[0],pdf=d.type==='PRO'?$('consultationFile').files[0]:null;
  try{validatePairSelection({original,pdf,existing,version})}catch(error){$('uploadProgress').textContent=error.message;return}
  setMutationBusy(true);let source=existing;try{
  $('uploadProgress').textContent='Guardando original…';if(original)source=await uploadOne(d.id,original,version);
- if(pdf){$('uploadProgress').textContent='Guardando PDF final…';const uploaded=await uploadOne(d.id,pdf,version);if(source){await rpc('gd_link_consultation',{p_source:source.id,p_pdf:uploaded.id})}else source=uploaded}
+ if(pdf){$('uploadProgress').textContent='Guardando PDF final…';if(source)await uploadManualPdf(source,pdf);else source=await uploadOne(d.id,pdf,version)}
  await refreshCloud();$('uploadDialog').close();if($('editor').open)$('editor').close();showDetail(d.id);if(procedureCurrent)renderProcedurePage(procedureCurrent);toast(pdf&&original?'Original y PDF final vinculados':'Archivo guardado y vinculado');
  if(d.type!=='PRO'&&original&&supportsPdf(original.name))getPdfPreview(db,source.id).then(()=>toast('PDF de consulta generado')).catch(error=>toast('Original guardado · '+error.message));
  }catch(error){$('uploadProgress').textContent=error.message;await refreshCloud().catch(()=>{});toast('Revisa los archivos ya cargados antes de reintentar.')}finally{setMutationBusy(false)}
@@ -112,14 +120,15 @@ async function fileBlob(f,bucket=config.bucket,path=f.storage_path){const key=bu
 async function downloadOriginal(id){const f=docs.flatMap(d=>d.files).find(f=>f.id===id);if(!f)return;const url=await fileBlob(f),a=document.createElement('a');a.href=url;a.download=f.name;a.click()}
 mountReader=async function(hostId,id,index=0){const d=docs.find(d=>d.id===id),files=d?.files.filter(f=>f.state==='ready')||[],original=files[index],host=$(hostId),token=crypto.randomUUID();if(!host)return;readerTokens.set(hostId,token);if(!original){host.innerHTML='<div class="empty-detail">'+icon('clock')+'<h2>Carga de documento pendiente</h2></div>';return}
  host.innerHTML='<div class="empty-detail" role="status">Cargando documento…</div>';
- try{const f=chooseConsultation(d,original,links);let url,ext=f.name.split('.').pop().toLowerCase();
- if(supportsPdf(f.name)){
+ try{const f=original,manual=getManualPdf(f,links);let url,ext=f.name.split('.').pop().toLowerCase(),displayName=f.name;
+ if(manual){url=await fileBlob(f,'gd-vistas-pdf',manual.storage_path);ext='pdf';displayName=f.name.replace(/\.[^.]+$/,'.pdf')}
+ else if(supportsPdf(f.name)){
   if(d.type==='PRO'){host.innerHTML=`<div class="reader-error"><h2>PDF de consulta pendiente</h2><button class="secondary" data-download="${f.id}">${icon('download')} Descargar original</button>${role==='admin'?`<button class="primary" data-upload="${d.id}">${icon('upload')} Cargar PDF final</button>`:''}</div>`;return}
   const p=await getPdfPreview(db,f.id,text=>{if(readerTokens.get(hostId)===token)host.textContent=text});url=await fileBlob(f,p.bucket,p.path);ext='pdf';
  }else url=await fileBlob(f);
  if(readerTokens.get(hostId)!==token||!host.isConnected)return;
- const content=ext==='pdf'?`<iframe class="document-frame" title="${esc(f.name)}" src="${esc(url)}"></iframe>`:['png','jpg','jpeg','gif','webp'].includes(ext)?`<div class="image-reader"><img src="${esc(url)}" alt="${esc(f.name)}"></div>`:'<div class="empty-detail">Vista previa no disponible para este formato.</div>';
- host.innerHTML=`<div class="reader-toolbar"><span>${icon('file')} ${esc(f.name)} · v${esc(f.version)}</span><button class="secondary" data-download="${original.id}">${icon('download')} Original</button>${f.id!==original.id?`<button class="secondary" data-download="${f.id}">PDF final</button>`:''}</div>${content}`;
+ const content=ext==='pdf'?`<iframe class="document-frame" title="${esc(displayName)}" src="${esc(url)}"></iframe>`:['png','jpg','jpeg','gif','webp'].includes(ext)?`<div class="image-reader"><img src="${esc(url)}" alt="${esc(f.name)}"></div>`:'<div class="empty-detail">Vista previa no disponible para este formato.</div>';
+ host.innerHTML=`<div class="reader-toolbar"><span>${icon('file')} ${esc(displayName)} · v${esc(f.version)}</span><button class="secondary" data-download="${original.id}">${icon('download')} Original</button>${manual?`<a class="original-link" href="${esc(url)}" download="${esc(displayName)}">${icon('download')} PDF final</a>`:''}</div>${content}`;
  }catch(error){if(readerTokens.get(hostId)!==token)return;host.innerHTML=`<div class="reader-error"><p>${esc(error.message)}</p><button class="primary" data-retry-host="${hostId}" data-reader-doc="${id}" data-reader-index="${index}">Reintentar</button><button class="secondary" data-download="${original.id}">Descargar original</button></div>`}
 };
 viewFile=function(id,index){const d=docs.find(d=>d.id===id),files=d?.files.filter(f=>f.state==='ready')||[];if(index===undefined)index=Math.max(0,files.length-1);$('fileTitle').textContent=d?.name||'Documento';$('fileDialog').showModal();mountReader('fileBody',id,index)};
