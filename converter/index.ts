@@ -6,6 +6,7 @@ const TARGET='https://afal-convertidor-pdf.onrender.com';
 const origins=new Set(['https://adriancarrillo1102-bot.github.io','https://supabase.com']);
 const bucket='gd-vistas-pdf';
 function json(body:unknown,status:number,headers:Record<string,string>){return new Response(JSON.stringify(body),{status,headers:{...headers,'Content-Type':'application/json','Cache-Control':'no-store'}})}
+async function errorDetail(body:ReadableStream<Uint8Array>|null){if(!body)return '';const reader=body.getReader();let text='';try{while(text.length<500){const part=await reader.read();if(part.done)break;text+=new TextDecoder().decode(part.value).slice(0,500-text.length)}}finally{await reader.cancel().catch(()=>{});reader.releaseLock()}return text}
 function secretKeys(){try{return Object.values(JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')||'{}')) as string[]}catch{return []}}
 export async function handler(req:Request){
  let failureDb:any=null,actor:string|null=null,context:any=null;
@@ -54,7 +55,7 @@ export async function handler(req:Request){
   const form=new FormData();form.append('files',new Blob([prepared.bytes],{type:file.mime}),'documento.'+extension(file.name));
   form.append('singlePageSheets','false');form.append('updateIndexes','false');
   const converted=await fetch(TARGET+'/forms/libreoffice/convert',{method:'POST',headers:{Authorization:auth,'Gotenberg-Output-Filename':file.id},body:form,redirect:'error',signal:AbortSignal.timeout(105000)});
-  if(!converted.ok){const detail=new TextDecoder().decode(await readBounded(converted.body,4096)).slice(0,500);return fail(converted.status===401?'Credencial del convertidor no válida':'Conversión no completada: '+detail,converted.status===400?422:503,converted.status===400?'failed':'retry',{converter_status:converted.status})}
+  if(!converted.ok){const detail=await errorDetail(converted.body);return fail(converted.status===401?'Credencial del convertidor no válida':'Conversión no completada (HTTP '+converted.status+'): '+(detail||'Servicio temporalmente no disponible'),converted.status===400?422:503,converted.status===400?'failed':'retry',{converter_status:converted.status})}
   const pdf=await readBounded(converted.body,PDF_LIMIT);if(!isPdf(pdf))return json({error:'El convertidor no devolvió un PDF'},502,headers);
   const active=await db.from('gd_documents').select('id').eq('id',file.document_id).is('deleted_at',null).maybeSingle();if(!active.data)return json({error:'Registro cancelado durante la conversión'},409,headers);
   const saved=await db.storage.from(bucket).upload(path,pdf,{contentType:'application/pdf',upsert:false});
