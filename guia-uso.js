@@ -25,4 +25,18 @@
  document.getElementById('collapseAll').addEventListener('click',()=>questions.forEach(item=>item.open=false));
  window.addEventListener('hashchange',revealHash);
  filter();revealHash();
+ const dialog=document.getElementById('captureDialog');let captureOpener=null;
+ document.addEventListener('click',event=>{
+  const button=event.target.closest('.enlarge-capture');if(!button)return;
+  const figure=button.closest('.guide-capture'),body=document.getElementById('captureDialogBody');
+  body.replaceChildren();const stage=figure.querySelector('.capture-stage').cloneNode(true);
+  // Evita duplicar IDs de marcadores SVG al mostrar la imagen ampliada.
+  for(const node of stage.querySelectorAll('[id]'))node.id='zoom-'+node.id;
+  for(const node of stage.querySelectorAll('[marker-end]'))node.setAttribute('marker-end',node.getAttribute('marker-end').replace('url(#','url(#zoom-'));
+  body.append(stage,figure.querySelector('.capture-legend').cloneNode(true));
+  document.getElementById('captureDialogTitle').textContent=figure.querySelector('figcaption').textContent;
+  captureOpener=button;dialog.showModal();
+ });
+ document.getElementById('closeCapture').addEventListener('click',()=>dialog.close());
+ dialog.addEventListener('close',()=>{document.getElementById('captureDialogBody').replaceChildren();captureOpener?.focus()});
 })();
