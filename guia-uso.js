@@ -26,17 +26,25 @@
  window.addEventListener('hashchange',revealHash);
  filter();revealHash();
  const dialog=document.getElementById('captureDialog');let captureOpener=null;
- document.addEventListener('click',event=>{
-  const button=event.target.closest('.enlarge-capture');if(!button)return;
-  const figure=button.closest('.guide-capture'),body=document.getElementById('captureDialogBody');
-  body.replaceChildren();const stage=figure.querySelector('.capture-stage').cloneNode(true);
-  // Evita duplicar IDs de marcadores SVG al mostrar la imagen ampliada.
-  for(const node of stage.querySelectorAll('[id]'))node.id='zoom-'+node.id;
-  for(const node of stage.querySelectorAll('[marker-end]'))node.setAttribute('marker-end',node.getAttribute('marker-end').replace('url(#','url(#zoom-'));
-  body.append(stage,figure.querySelector('.capture-legend').cloneNode(true));
-  document.getElementById('captureDialogTitle').textContent=figure.querySelector('figcaption').textContent;
-  captureOpener=button;dialog.showModal();
+ const tutorials=[...document.querySelectorAll('.context-tutorial')];
+ function render(t){const steps=t._steps,s=steps[t._current],r=s.rect;
+ t.querySelector('img').src=s.src;t.querySelector('img').alt='Pantalla de referencia: '+s.path;
+ t.querySelector('.context-path').textContent=s.path;
+ const box=t.querySelector('.context-focus');['left','top','width','height'].forEach((key,i)=>box.style[key]=r[i]+'%');
+ t.querySelector('.context-number').textContent=t._current+1;
+ t.querySelector('.context-count').textContent='PASO '+(t._current+1)+' DE '+steps.length;
+ t.querySelector('h3').textContent=s.label;t.querySelector('.context-bubble p').textContent=s.instruction;
+ t.querySelector('.context-position').textContent=(t._current+1)+' / '+steps.length;
+ t.querySelector('.context-prev').disabled=t._current===0;
+ t.querySelector('.context-next').textContent=t._current===steps.length-1?'Volver al inicio':'Siguiente paso';
+ }
+ tutorials.forEach(t=>{t._steps=JSON.parse(t.dataset.steps);t._current=0;render(t);
+ t.querySelector('.context-prev').onclick=()=>{if(t._current>0)t._current--;render(t)};
+ t.querySelector('.context-next').onclick=()=>{t._current=(t._current+1)%t._steps.length;render(t)};
+ t.querySelector('.context-zoom').onclick=()=>{const body=document.getElementById('captureDialogBody');
+ body.replaceChildren(t.querySelector('.context-frame').cloneNode(true),t.querySelector('.context-bubble').cloneNode(true));
+ document.getElementById('captureDialogTitle').textContent=t._steps[t._current].path;captureOpener=t.querySelector('.context-zoom');dialog.showModal()};
  });
- document.getElementById('closeCapture').addEventListener('click',()=>dialog.close());
+ document.getElementById('closeCapture').onclick=()=>dialog.close();
  dialog.addEventListener('close',()=>{document.getElementById('captureDialogBody').replaceChildren();captureOpener?.focus()});
 })();
