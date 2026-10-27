@@ -11,3 +11,5 @@ header{gap:20px}.header-right{display:flex;align-items:center;justify-content:fl
 
 /* Structured document entry fields. */
 .historical-value{display:block;margin-top:5px;color:#6a7e8e;font-size:11px}.owner-selector .filter-trigger{width:100%;min-height:42px;text-align:left}.owner-selector .filter-trigger>span{white-space:normal;overflow-wrap:anywhere}.owner-selector .filter-menu{width:100%;min-width:280px;max-width:calc(100vw - 80px)}.owner-selector .filter-option{white-space:normal;text-align:left;line-height:1.45}.owner-selector .filter-options{max-height:230px;overflow:auto}#editCustody{width:100%;resize:vertical}#editDate{min-height:42px;color-scheme:light}#editor .dialog-body{overflow:visible}
+
+.pdf-availability{margin:8px 5px 0 0}.pdf-ready{background:#e5f5fc;color:#005b7e;border:1px solid #b5deed}
