@@ -28,3 +28,9 @@ header{gap:20px}.header-right{display:flex;align-items:center;justify-content:fl
 .status:has(.load-indicator){gap:7px}.status .load-indicator{width:19px;height:19px;min-width:19px}.status .load-indicator .ico{width:12px;height:12px}
 .procedure-doc-button>.load-indicator,.file-tile>.load-indicator{width:28px;height:28px;min-width:28px}.procedure-doc-button>.load-indicator .ico,.file-tile>.load-indicator .ico{width:17px;height:17px}
 .empty-detail>.load-indicator{margin-bottom:10px}.empty-inline .load-indicator{margin-right:5px}.link-tile>.load-indicator{margin-right:2px}
+
+/* Compact, three-state upload indicators. */
+.load-indicator{width:18px;height:18px;min-width:18px}.load-indicator.is-partial{background:#c69a00}
+.load-indicator .ico,.status .load-indicator .ico{width:11px;height:11px}
+.status .load-indicator{width:16px;height:16px;min-width:16px}.status .load-indicator .ico{width:10px;height:10px}
+.procedure-doc-button>.load-indicator,.file-tile>.load-indicator{width:20px;height:20px;min-width:20px}.procedure-doc-button>.load-indicator .ico,.file-tile>.load-indicator .ico{width:12px;height:12px}
