@@ -1,11 +1,15 @@
 // Consultation uses a canvas viewer, never a browser PDF iframe with save/print controls.
 let library;
 const contexts=new WeakMap();
+export function prepareConsultationPdf(){
+ if(!library)library=import('./vendor/pdf.min.mjs').catch(error=>{library=null;throw error});
+ return library;
+}
 export async function mountConsultationPdf(host,blob,isCurrent=()=>true){
  const old=contexts.get(host);if(old){old.cancelled=true;old.render?.cancel();await old.pdf?.destroy()}
  const ctx={page:1,zoom:1,cancelled:false,serial:0,pdf:null,render:null};contexts.set(host,ctx);
  host.innerHTML='<div class="empty-detail" role="status">Preparando vista de consulta…</div>';
- library ||= import('./vendor/pdf.min.mjs');const lib=await library;lib.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.min.mjs',import.meta.url).href;
+ const lib=await prepareConsultationPdf();lib.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.min.mjs',import.meta.url).href;
  const pdf=await lib.getDocument({data:new Uint8Array(await blob.arrayBuffer()),isEvalSupported:false,enableXfa:false}).promise;
  if(!isCurrent()||ctx.cancelled){await pdf.destroy();return}ctx.pdf=pdf;
  host.innerHTML='<div class="consultation-pdf-controls"><button type="button" class="secondary" data-page="prev" aria-label="Página anterior">←</button><span class="consultation-page-label" role="status"></span><button type="button" class="secondary" data-page="next" aria-label="Página siguiente">→</button><button type="button" class="secondary" data-page="out" aria-label="Reducir documento">−</button><button type="button" class="secondary" data-page="in" aria-label="Ampliar documento">+</button><span class="status">Solo consulta</span></div><div class="consultation-canvas-wrap"><canvas aria-label="Página del documento"></canvas></div>';

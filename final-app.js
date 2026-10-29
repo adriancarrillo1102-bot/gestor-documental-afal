@@ -1,5 +1,6 @@
+import {createReadQueue,existingPdfOrConvert} from './reader-loading.js?v=20261029-speed-1';
 import {mountUserManagement} from './user-management.js?v=20261029-users-1';
-import {mountConsultationPdf} from './consultation-viewer.js?v=20261029-1';
+import {mountConsultationPdf,prepareConsultationPdf} from './consultation-viewer.js?v=20261029-speed-1';
 import {consultationRequest} from './consultation-access.js?v=20261029-users-1';
 import {consultationReady,mergeConfirmedUpload,synchronizeConfirmedUpload} from './upload-state.js?v=20261027-1';
 import {versionChoices,nextVersion,calendarDate,emissionDate,choiceWithHistory,responsibleOptions,ownerMetadata} from './document-form.js?v=20261026-1';
@@ -108,7 +109,7 @@ const db=window.supabase.createClient(config.url,config.publishableKey,{global:{
 let consultationAccess=sessionStorage.getItem('afal-user-session')||'',isGeneral=false,currentUsername='';
 sessionStorage.removeItem('afal-consultation-session');
 let user=null,links=[],mutationBusy=false,editorRevision=null,createRequest=crypto.randomUUID(),refreshToken=0;
-const blobUrls=new Map(),readerTokens=new Map();
+const blobUrls=new Map(),readerTokens=new Map(),readOnce=createReadQueue(),consultationReadOnce=createReadQueue();
 async function rpc(name,args={}){const r=await db.rpc(name,args);if(r.error)throw r.error;return r.data}
 async function allRows(table,modify=q=>q){let out=[];for(let i=0;;i+=1000){const r=await modify(db.from(table).select('*')).range(i,i+999);if(r.error)throw r.error;out.push(...r.data);if(r.data.length<1000)return out}}
 function codePreview(){$('nextCode').textContent=editId?(docs.find(d=>d.id===editId)?.code||''):'Código automático al guardar'}
@@ -197,17 +198,24 @@ async function uploadCloud(e){
  }finally{setMutationBusy(false)}
 }
 
-async function fileBlob(f,bucket=config.bucket,path=f.storage_path){const key=bucket+'/'+path;if(blobUrls.has(key))return blobUrls.get(key);const r=consultationAccess?{data:await consultationRequest('file',{token:consultationAccess,file_id:f.id,variant:bucket==='gd-vistas-pdf'?'pdf':'original'})}:await db.storage.from(bucket).download(path);if(r.error)throw r.error;const url=URL.createObjectURL(r.data);blobUrls.set(key,url);return url}
+async function fileBlob(f,bucket=config.bucket,path=f.storage_path){
+ const key=bucket+'/'+path;if(blobUrls.has(key))return blobUrls.get(key);
+ return readOnce(key,async()=>{if(blobUrls.has(key))return blobUrls.get(key);const r=consultationAccess?{data:await consultationRequest('file',{token:consultationAccess,file_id:f.id,variant:bucket==='gd-vistas-pdf'?'pdf':'original'})}:await db.storage.from(bucket).download(path);if(r.error)throw r.error;
+  // An upload may have replaced this PDF while the previous read was in flight.
+  if(blobUrls.has(key))return blobUrls.get(key);
+  const url=URL.createObjectURL(r.data);blobUrls.set(key,url);return url});
+}
 async function downloadOriginal(id){if(consultationAccess)return;const f=docs.flatMap(d=>d.files).find(f=>f.id===id);if(!f)return;const url=await fileBlob(f),a=document.createElement('a');a.href=url;a.download=f.name;a.click()}
 mountReader=async function(hostId,id,index=0){const d=docs.find(d=>d.id===id),files=d?.files.filter(f=>f.state==='ready')||[],original=files[index],host=$(hostId),token=crypto.randomUUID();if(!host)return;readerContexts.set(hostId,{d,f:original,index,sheet:0});readerTokens.set(hostId,token);if(!original){host.innerHTML='<div class="empty-detail">'+icon('clock')+'<h2>Carga de documento pendiente</h2></div>';return}
  host.innerHTML='<div class="empty-detail" role="status">Cargando documento…</div>';
- try{if(consultationAccess){const blob=await consultationRequest('file',{token:consultationAccess,file_id:original.id,variant:'pdf'});if(readerTokens.get(hostId)!==token||!host.isConnected)return;await mountConsultationPdf(host,blob,()=>readerTokens.get(hostId)===token&&host.isConnected);return}
+ try{if(consultationAccess){const access=consultationAccess;prepareConsultationPdf().catch(()=>{});const blob=await consultationReadOnce(access+':'+original.id,()=>consultationRequest('file',{token:access,file_id:original.id,variant:'pdf'}));if(consultationAccess!==access)return;if(readerTokens.get(hostId)!==token||!host.isConnected)return;await mountConsultationPdf(host,blob,()=>readerTokens.get(hostId)===token&&host.isConnected);return}
  const f=original,manual=getManualPdf(f,links);let url,ext=f.name.split('.').pop().toLowerCase(),displayName=f.name;
  if(manual){url=await fileBlob(f,'gd-vistas-pdf',manual.storage_path);ext='pdf';displayName=f.name.replace(/\.[^.]+$/,'.pdf')}
  else if(supportsPdf(f.name)){
   if(d.type==='PRO'){host.innerHTML=`<div class="reader-error"><h2>PDF de consulta pendiente</h2><button class="secondary" data-download="${f.id}">${icon('download')} Descargar original</button>${role==='admin'?`<button class="primary" data-upload="${d.id}" data-source="${f.id}">${icon('upload')} Cargar PDF final</button>`:''}</div>`;return}
-  if(consultationAccess){url=await fileBlob(f,'gd-vistas-pdf',consultationPath(f));ext='pdf';displayName=f.name.replace(/\.[^.]+$/,'.pdf')}else{
-  const p=await getPdfPreview(db,f.id,text=>{if(readerTokens.get(hostId)===token)host.textContent=text});url=await fileBlob(f,p.bucket,p.path);ext='pdf';displayName=f.name.replace(/\.[^.]+$/,'.pdf');}
+  url=await existingPdfOrConvert(()=>fileBlob(f,'gd-vistas-pdf',consultationPath(f)),async()=>{
+   const p=await getPdfPreview(db,f.id,text=>{if(readerTokens.get(hostId)===token)host.textContent=text});return fileBlob(f,p.bucket,p.path);
+  });ext='pdf';displayName=f.name.replace(/\.[^.]+$/,'.pdf');
  }else url=await fileBlob(f);
  if(readerTokens.get(hostId)!==token||!host.isConnected)return;
  const content=ext==='pdf'?`<iframe class="document-frame" title="${esc(displayName)}" src="${esc(url)}"></iframe>`:['png','jpg','jpeg','gif','webp'].includes(ext)?`<div class="image-reader"><img src="${esc(url)}" alt="${esc(f.name)}"></div>`:'<div class="empty-detail">Vista previa no disponible para este formato.</div>';
