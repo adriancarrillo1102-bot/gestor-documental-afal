@@ -34,3 +34,11 @@ header{gap:20px}.header-right{display:flex;align-items:center;justify-content:fl
 .load-indicator .ico,.status .load-indicator .ico{width:11px;height:11px}
 .status .load-indicator{width:16px;height:16px;min-width:16px}.status .load-indicator .ico{width:10px;height:10px}
 .procedure-doc-button>.load-indicator,.file-tile>.load-indicator{width:20px;height:20px;min-width:20px}.procedure-doc-button>.load-indicator .ico,.file-tile>.load-indicator .ico{width:12px;height:12px}
+
+/* Minimal file-state dots and procedure completion checklist. */
+.load-indicator,.status .load-indicator,.procedure-doc-button>.load-indicator,.file-tile>.load-indicator{width:8px;height:8px;min-width:8px;border:0;box-shadow:none;padding:0}
+.procedure-toolbar{grid-template-columns:minmax(220px,2fr) minmax(160px,1fr) minmax(160px,1fr) auto}
+.procedure-missing{margin:0 0 20px;padding:14px;border:1px solid #eadca7;border-radius:9px;background:#fffbee}
+.procedure-missing h3{margin:0 0 10px;font-size:12px}.procedure-missing ul{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.procedure-missing li{display:grid;gap:3px;font-size:11px;line-height:1.5;overflow-wrap:anywhere}.procedure-missing li+li{border-top:1px solid #eee4c9;padding-top:10px}.procedure-missing li>span:last-child{color:#58798c}
+@media(max-width:1050px){.procedure-toolbar{grid-template-columns:1fr 1fr}}@media(max-width:520px){.procedure-toolbar{grid-template-columns:1fr}}
