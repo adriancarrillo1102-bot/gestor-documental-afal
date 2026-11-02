@@ -42,3 +42,5 @@ header{gap:20px}.header-right{display:flex;align-items:center;justify-content:fl
 .procedure-missing h3{margin:0 0 10px;font-size:12px}.procedure-missing ul{list-style:none;padding:0;margin:0;display:grid;gap:10px}
 .procedure-missing li{display:grid;gap:3px;font-size:11px;line-height:1.5;overflow-wrap:anywhere}.procedure-missing li+li{border-top:1px solid #eee4c9;padding-top:10px}.procedure-missing li>span:last-child{color:#58798c}
 @media(max-width:1050px){.procedure-toolbar{grid-template-columns:1fr 1fr}}@media(max-width:520px){.procedure-toolbar{grid-template-columns:1fr}}
+
+.macro-lock{display:flex;align-items:center;gap:5px;margin-top:7px}.macro-lock .ico{width:13px;height:13px}.macro-workspace .user-row-actions button:disabled{opacity:.45;cursor:not-allowed}.macro-workspace input[readonly]{background:#f1f6f9;color:#58798c}#mcCount{margin:12px 0}#mcMessage,#mcListMessage{font-size:12px;line-height:1.5;margin-top:12px}.macro-workspace .users-table td:nth-child(2){min-width:200px}.nav-actions{flex-wrap:wrap}
