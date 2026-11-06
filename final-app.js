@@ -264,6 +264,12 @@ mountReader=async function(hostId,id,index=0){const d=docs.find(d=>d.id===id),fi
   });ext='pdf';displayName=f.name.replace(/\.[^.]+$/,'.pdf');
  }else url=await fileBlob(f);
  if(readerTokens.get(hostId)!==token||!host.isConnected)return;
+ if(ext==='pdf'&&host.closest('#compareDialog')){
+  const blob=await (await fetch(url)).blob();
+  if(readerTokens.get(hostId)!==token||!host.isConnected)return;
+  await mountConsultationPdf(host,blob,()=>readerTokens.get(hostId)===token&&host.isConnected);
+  return;
+ }
  const content=ext==='pdf'?`<iframe class="document-frame" title="${esc(displayName)}" src="${esc(url)}"></iframe>`:['png','jpg','jpeg','gif','webp'].includes(ext)?`<div class="image-reader"><img src="${esc(url)}" alt="${esc(f.name)}"></div>`:'<div class="empty-detail">Vista previa no disponible para este formato.</div>';
  host.innerHTML=`<div class="reader-toolbar"><span>${icon('file')} ${esc(displayName)} · v${esc(f.version)}</span><button class="secondary" data-download="${original.id}">${icon('download')} Original</button>${manual?`<a class="original-link" href="${esc(url)}" download="${esc(displayName)}">${icon('download')} PDF final</a>`:''}</div>${content}`;
  }catch(error){if(readerTokens.get(hostId)!==token)return;if(consultationAccess){host.innerHTML=`<div class="reader-error"><p>${esc(error.message)}</p><button class="secondary" data-retry-host="${hostId}" data-reader-doc="${id}" data-reader-index="${index}">Reintentar</button></div>`;return}host.innerHTML=`<div class="reader-error"><p>${esc(error.message)}</p><button class="primary" data-retry-host="${hostId}" data-reader-doc="${id}" data-reader-index="${index}">Reintentar</button><button class="secondary" data-download="${original.id}">Descargar original</button>${role==='admin'?`<button class="primary" data-upload="${d.id}" data-source="${original.id}">Cargar PDF de consulta</button>`:''}</div>`}
