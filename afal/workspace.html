@@ -1692,7 +1692,16 @@ async function pruneFlowXmlDocs(flowId,parts){return true}
 function snapshotStateForPersistence(){const snapshot=mutableClone(state);snapshot.__xmlEntries=[...runtimeXml];return snapshot}
 function restoreStateAfterPersistenceFailure(snapshot){if(!snapshot)return;const copy=mutableClone(snapshot);const xml=copy.__xmlEntries;delete copy.__xmlEntries;for(const key of Object.keys(state))delete state[key];Object.assign(state,copy);if(xml){runtimeXml.clear();for(const [id,value] of xml)runtimeXml.set(id,value)}}
 let afalTrialSaving=false;
+const nomenclatureDisplayTitles=Object.freeze({flow_mu4h5rrf_hf1iz:'Planear las Compras de los Productos de Inventario de los CEDIS',flow_mu4h5rqi_qkqwg:'Administrar servicio de morralla',flow_mu4h5rqj_xkjn3:'Administrar servicio de morralla'});
+const nomenclatureOriginalTitles=new WeakMap();
 function applyAfalTrialEdits(){
+ for(const flow of state.flows){
+  const title=nomenclatureDisplayTitles[flow.id];
+  if(!title||nomenclatureOriginalTitles.has(flow))continue;
+  const meta=ensureFlowMatrixMeta(flow);
+  nomenclatureOriginalTitles.set(flow,meta.procedureFinal);
+  meta.procedureFinal=title;
+ }
  for(const {key,payload} of parent.afalTrialEdits||[]){
   if(key.startsWith('nomenclature:')){
    const flow=state.flows.find(f=>f.id===key.slice('nomenclature:'.length));
@@ -2498,7 +2507,7 @@ function implementationProgress(data){const vals=IMPLEMENTATION_SECTION_KEYS.map
 function implementationGeneralStatus(data){const p=implementationProgress(data);if(p===0)return'No iniciado';if(p<50)return'En proceso';if(p===50)return'Por validar';if(p<100)return'En correcciones';return'Validado'}
 function implementationStatusClass(st){return st==='No iniciado'?'no':st==='En proceso'?'process':st==='Por validar'?'validate':st==='En correcciones'?'corrections':'validated'}
 
-function implementationDocumentKey(f){const m=ensureFlowMatrixMeta(f),finalName=String(m.procedureFinal||m.procedureOriginal||flowDisplayName(f)||'').trim();return`final:${normText(m.macroFinal||m.macroOriginal)}|${normText(m.processFinal||m.processOriginal)}|${normText(finalName)}`}
+function implementationDocumentKey(f){const m=ensureFlowMatrixMeta(f),finalName=String(nomenclatureOriginalTitles.get(f)||m.procedureFinal||m.procedureOriginal||flowDisplayName(f)||'').trim();return`final:${normText(m.macroFinal||m.macroOriginal)}|${normText(m.processFinal||m.processOriginal)}|${normText(finalName)}`}
 function implementationRecordScore(flowId){const d=readImplementationFor(flowId);return implementationProgress(d)*1000+implementationSessionCount(d)*20+(d.comments?.length||0)*10+(d.completedDate?5:0)+(d.releasedBy?5:0)+(d.team?1:0)}
 function implementationDocumentUnits(rows=implementationEligibleRows()){const groups=new Map();for(const f of rows){const key=implementationDocumentKey(f);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(f)}return[...groups.entries()].map(([key,sourceFlows])=>{const ranked=sourceFlows.slice().sort((a,b)=>implementationRecordScore(b.id)-implementationRecordScore(a.id));const f=ranked[0],m=ensureFlowMatrixMeta(f),data=readImplementationFor(f.id);return{key,f,m,data,sourceFlows,sourceIds:sourceFlows.map(x=>x.id),progress:implementationProgress(data),generalStatus:implementationGeneralStatus(data),architectureWeight:sourceFlows.length}})}
 function implementationUnitForFlow(flowId){const eligible=implementationEligibleRows(),f=eligible.find(x=>x.id===flowId);if(!f)return null;const key=implementationDocumentKey(f);return implementationDocumentUnits(eligible.filter(x=>implementationDocumentKey(x)===key))[0]||null}
