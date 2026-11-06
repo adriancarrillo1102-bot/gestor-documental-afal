@@ -132,12 +132,44 @@ async function refreshCloud(){
  renderSummary();renderFilters();renderRows();applyRole();if(!selected&&docs.length)showDetail(docs[0].id);if(view==='stats')renderStats();if(view==='procedures'){renderProcedureFilters();if(!procedureCurrent)renderProcedureInventory()}
 }
 function setMutationBusy(value){mutationBusy=value;for(const id of ['saveEditor','uploadSubmit','cancelRecord','refreshPreview','newDocument'])$(id).disabled=value;document.querySelectorAll('[data-close="editor"],[data-close="uploadDialog"]').forEach(b=>b.disabled=value)}
-const baseOpenEditor=openEditor;openEditor=function(id=null){if(role!=='admin'||consultationAccess||mutationBusy)return;baseOpenEditor(id);editorRevision=docs.find(d=>d.id===id)?.revision;createRequest=crypto.randomUUID()};
+const baseOpenEditor=openEditor;openEditor=function(id=null){if(role!=='admin'||consultationAccess||mutationBusy)return;baseOpenEditor(id);editorRevision=docs.find(d=>d.id===id)?.revision;createRequest=crypto.randomUUID();const allowed=isGeneral&&!consultationAccess;$('correctCode').hidden=!allowed||!id;$('existingCodeAction').hidden=!allowed||!!id;$('useExistingCode').onchange()};
+
+$('useExistingCode').onchange=()=>{
+ const manual=$('useExistingCode').checked&&!$('existingCodeAction').hidden;
+ $('existingCodeFields').hidden=!manual;
+ for(const id of ['existingCode','existingCodeReason']) $(id).required=manual;
+};
+function parseExistingCode(value){
+ return value.trim().toUpperCase().match(/^(GA-[A-Z]{2}[0-9]{2,3})-([A-Z0-9]+)-([0-9]{3,9})$/);
+}
+$('correctCode').onclick=async()=>{
+ if(!isGeneral||consultationAccess||mutationBusy||!editId)return;
+ const d=docs.find(doc=>doc.id===editId);
+ const input=window.prompt('Nomenclatura actual: '+d.code+'\nEscribe la nueva nomenclatura completa.',d.code);
+ if(input===null)return;
+ const parts=parseExistingCode(input);
+ if(!parts){$('formError').textContent='Escribe una nomenclatura válida.';return}
+ if(parts[0]===d.code)return;
+ const reason=window.prompt('Confirma el cambio de '+d.code+' a '+parts[0]+'.\nEscribe el motivo. Los cambios sin guardar en Editar datos se descartarán.');
+ if(reason===null)return;
+ setMutationBusy(true);
+ try{
+  await rpc('gd_assign_existing_code',{p_id:d.id,p_revision:editorRevision,p_code:parts[0],p_name:null,p_meta:null,p_request:null,p_reason:reason});
+  $('editor').close();await refreshCloud();setView('catalog');showDetail(d.id);toast('Nomenclatura corregida');
+ }catch(error){if($('editor').open)$('formError').textContent=error.message;else toast(error.message)}
+ finally{setMutationBusy(false)}
+};
 async function saveCloudEditor(e){e.preventDefault();if(role!=='admin'||mutationBusy)return;const d=docs.find(d=>d.id===editId),m={...d?.meta,wave:$('editWave').value==='Piloto'?'Piloto':Number($('editWave').value)||null,version:$('editVersion').value.trim(),date:emissionDate($('editDate').value,d?.meta.date),...ownerMetadata(responsibleCatalog,selectedOwnerId,d?.meta),recordKnown:$('editRecord').value!=='',record:$('editRecord').value==='yes',period:$('editPeriod').value.trim(),retention:$('editRetention').value.trim(),custody:$('editCustody').value.trim(),notes:$('editNotes').value.trim(),procedureIds:$('editType').value==='PRO'?[]:[...selectedProcedures]};
  if(!editId&&$('confirmNew')&&!$('confirmNew').checked){$('formError').textContent='Confirma que es un documento nuevo.';return}
  if(!editId&&(!m.wave||!m.version||!m.date)){$('formError').textContent='Completa ola, versión y fecha.';return}
  if(!editId&&$('editType').value!=='PRO'&&!m.procedureIds.length){$('formError').textContent='Selecciona un procedimiento relacionado.';return}
- setMutationBusy(true);try{let id=editId;if(id)await rpc('gd_edit',{p_id:id,p_name:$('editName').value.trim(),p_meta:m,p_revision:editorRevision});else id=await rpc('gd_register',{p_macro:$('editMacro').value,p_type:$('editType').value,p_name:$('editName').value.trim(),p_meta:m,p_request:createRequest});await refreshCloud();$('editor').close();setView('catalog');showDetail(id);toast(d?'Datos actualizados':'Registro creado · Carga de documento pendiente')}catch(error){$('formError').textContent=error.message}finally{setMutationBusy(false)}
+ const manual=!editId&&isGeneral&&!consultationAccess&&$('useExistingCode').checked;
+ const parts=manual?parseExistingCode($('existingCode').value):null;
+ if(manual&&(!parts||parts[1]!==$('editMacro').value||parts[2]!==$('editType').value)){
+  $('formError').textContent='El código existente debe coincidir con el macroproceso y el tipo seleccionados.';return
+ }
+ if(manual&&!window.confirm('Dar de alta con '+parts[0]+'?'))return;
+ setMutationBusy(true);try{let id=editId;if(id)await rpc('gd_edit',{p_id:id,p_name:$('editName').value.trim(),p_meta:m,p_revision:editorRevision});else if(manual)id=await rpc('gd_assign_existing_code',{p_id:null,p_revision:null,p_code:parts[0],p_name:$('editName').value.trim(),p_meta:m,p_request:createRequest,p_reason:$('existingCodeReason').value});else id=await rpc('gd_register',{p_macro:$('editMacro').value,p_type:$('editType').value,p_name:$('editName').value.trim(),p_meta:m,p_request:createRequest});await refreshCloud();$('editor').close();setView('catalog');showDetail(id);toast(d?'Datos actualizados':'Registro creado · Carga de documento pendiente')}catch(error){$('formError').textContent=error.message}finally{setMutationBusy(false)}
 }
 function openUpload(id,sourceId=null){if(role!=='admin'||mutationBusy)return;const d=docs.find(d=>d.id===id);if(!d)return;uploadId=id;$('uploadForm').reset();$('uploadProgress').textContent='';$('uploadTitle').innerHTML=icon('upload')+' '+(C.ready(d)?'Cargar otra versión':'Cargar documento');$('uploadCode').textContent=d.code;
  const ready=d.files.filter(f=>f.state==='ready'),available=ready.filter(f=>supportsPdf(f.name)&&(d.type!=='PRO'||!links.some(p=>p.source_id===f.id)));$('pdfPairFields').hidden=false;$('existingSource').innerHTML='<option value="">Cargar un original nuevo</option>'+available.map(f=>`<option value="${f.id}">v${esc(f.version)} · ${esc(f.name)}</option>`).join('');$('uploadFile').required=d.type!=='PRO';$('uploadFile').disabled=false;$('uploadVersion').disabled=false;$('uploadFile').closest('.drop-zone').hidden=false;$('consultationFile').required=false;document.querySelector('label[for="consultationFile"]').textContent='PDF de consulta (opcional con un original nuevo)';$('uploadSubmit').textContent='Cargar archivos';
