@@ -1,6 +1,8 @@
 import {config} from '../config.js';
 
-const client=window.supabase.createClient(config.url,config.publishableKey,{auth:{storageKey:"afal-module-session"}});
+const afalClient=window.supabase.createClient(config.url,config.publishableKey,{auth:{storageKey:"afal-module-session"}});
+const gestorClient=window.supabase.createClient(config.url,config.publishableKey);
+let client=afalClient;
 const login=document.getElementById('login');
 const status=document.getElementById('status');
 const frame=document.getElementById('module');
@@ -60,13 +62,20 @@ login.onsubmit=async event=>{
  event.preventDefault();
  const button=login.querySelector('button');button.disabled=true;
  try{
-  const {error}=await client.auth.signInWithPassword({email:loginAddress(login.elements.identifier.value),password:login.elements.password.value});
+  const identifier=login.elements.identifier.value.trim();
+  client=identifier.includes('@')?gestorClient:afalClient;
+  const {error}=await client.auth.signInWithPassword({email:loginAddress(identifier),password:login.elements.password.value});
   login.elements.password.value='';
   if(error)throw error;
   await openTrial();
  }catch(e){status.textContent=e.message}finally{button.disabled=false}
 };
 exit.onclick=async()=>{await client.auth.signOut({scope:'local'});location.reload()};
+const {data:gestor}=await gestorClient.auth.getSession();
+if(gestor.session){
+ const {data:role}=await gestorClient.rpc('afal_trial_access_role');
+ if(role==='manager')client=gestorClient;
+}
 const {data}=await client.auth.getSession();
 if(data.session)try{await openTrial()}catch(e){status.textContent=e.message}
 
