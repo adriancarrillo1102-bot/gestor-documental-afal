@@ -1706,6 +1706,9 @@ function applyAfalTrialEdits(){
   if(key.startsWith('nomenclature:')){
    const flow=state.flows.find(f=>f.id===key.slice('nomenclature:'.length));
    if(flow&&payload.code)ensureFlowMatrixMeta(flow).procedureNumber=payload.code;
+  }else if(key.startsWith('matrix:')){
+   const flow=state.flows.find(f=>f.id===key.slice(7));
+   if(flow)Object.assign(ensureFlowMatrixMeta(flow),payload);
   }else if(key.startsWith('implementation:')){
    const id=key.slice('implementation:'.length);
    state.projectImplementation[id]={...readImplementationFor(id),...mutableClone(payload)};
@@ -1916,7 +1919,36 @@ function architectureMatrixEditControl(f,key){const v=architectureMatrixValue(f,
  return`<input ${common} type="text" value="${esc(v)}" oninput="architectureMatrixSetDraft('${esc(f.id)}','${key}',this.value,this)">`}
 function architectureMatrixValidateDraft(){if(!architectureMatrixEditActive())return{ok:false,message:'No existe una sesión de edición activa.'};for(const f of architectureRows()){const m=state.bankEdit.draft[f.id];if(!m||!reportColumns().some(([k])=>architectureMatrixCellChanged(f,k)))continue;const label=m.procedureNumber||m.procedureFinal||m.procedureOriginal||f.name||f.id;if(m.documenterName&&m.companionDocumenterName&&normText(m.documenterName)===normText(m.companionDocumenterName))return{ok:false,message:`${label}: el Documentador Titular y el Documentador Acompañante deben ser personas distintas.`};for(const [rk,nk] of [['responsibleRole','responsibleName'],['documenterRole','documenterName'],['companionDocumenterRole','companionDocumenterName']])if(m[nk]&&!assignmentPairValid(m[rk],m[nk]))return{ok:false,message:`${label}: la relación ${rk}/${nk} no coincide con Catálogos.`};if(architectureMatrixCellChanged(f,'status')||architectureMatrixCellChanged(f,'completedDate')){const status=normalizeArchitectureStatus(m.status);if(status==='Validado'&&!String(m.completedDate||'').trim())return{ok:false,message:`${label}: un procedimiento Validado requiere Fecha de validación.`};if(status!=='Validado'&&String(m.completedDate||'').trim())return{ok:false,message:`${label}: Fecha de validación solo puede existir cuando el estatus es Validado.`}}if(architectureMatrixCellChanged(f,'macroFinal')||architectureMatrixCellChanged(f,'processFinal')){const refs=architectureMatrixStructuralRefs(m);if(m.macroFinal&&!refs.macro)return{ok:false,message:`${label}: Macroproceso Final debe corresponder a un macroproceso existente.`};if(m.processFinal&&!refs.process)return{ok:false,message:`${label}: Proceso Final debe corresponder al Macroproceso Final seleccionado.`}}}return{ok:true}}
 function requestSaveArchitectureMatrix(){if(!architectureMatrixEditActive())return;const c=architectureMatrixRecount();if(!c.cells)return;const valid=architectureMatrixValidateDraft();if(!valid.ok){inputAlert(valid.message);return}openModal(`<h3 id="modalTitle">Confirmar cambios de Arquitectura</h3><div class="empty">Se actualizarán <b>${c.rows}</b> procedimiento${c.rows===1?'':'s'} con <b>${c.cells}</b> campo${c.cells===1?'':'s'} modificado${c.cells===1?'':'s'}.<br><span class="mini">Arquitectura es la fuente de verdad consumida por las demás vistas del proyecto.</span></div><div class="modalactions"><button class="btn" type="button" onclick="closeModal()">Cancelar</button><button class="btn primary" type="button" onclick="commitArchitectureMatrixEdit()">Confirmar y guardar</button></div>`,{backdropDismissible:false})}
-async function commitArchitectureMatrixEdit(){if(!architectureMatrixEditActive())return;const valid=architectureMatrixValidateDraft();if(!valid.ok){closeModal();inputAlert(valid.message);return}const session=state.bankEdit,changed=architectureRows().filter(f=>reportColumns().some(([k])=>architectureMatrixCellChanged(f,k)));if(!changed.length){closeModal();state.bankEdit=null;render();return}const before=snapshotStateForPersistence();const rollback=new Map(changed.map(f=>[f.id,{matrix:mutableClone(ensureFlowMatrixMeta(f)),macroId:f.macroId,processId:f.processId,laneId:f.laneId}])),waveRollback=mutableClone(state.waveCatalog);for(const f of changed){const structuralChanged=architectureMatrixCellChanged(f,'macroFinal')||architectureMatrixCellChanged(f,'processFinal');f.matrix=mutableClone(session.draft[f.id]);if(structuralChanged)applyArchitectureMatrixStructuralRefs(f,f.matrix);if(f.matrix.implementationWave)registerWave(f.matrix.implementationWave)}const saved=await saveMeta();if(!saved){restoreStateAfterPersistenceFailure(before);closeModal();inputAlert(`No fue posible guardar los cambios. ${lastPersistError||'La edición permanece disponible para reintentar.'}`);state.bankEdit=session;renderBankView();return}state.bankEdit=null;closeModal();render()}
+let matrixSaving=false;
+async function commitArchitectureMatrixEdit(){
+ if(!architectureMatrixEditActive()||matrixSaving)return;
+ const valid=architectureMatrixValidateDraft();
+ if(!valid.ok){closeModal();inputAlert(valid.message);return}
+ const session=state.bankEdit;
+ const changes=architectureRows().flatMap(f=>{
+  const fields=reportColumns().map(([key])=>key).filter(key=>architectureMatrixCellChanged(f,key));
+  return fields.length?[{key:'matrix:'+f.id,payload:Object.fromEntries(fields.map(key=>[key,session.draft[f.id][key]??'']))}]:[];
+ });
+ if(!changes.length){state.bankEdit=null;closeModal();render();return}
+ if(changes.some(change=>Object.keys(change.payload).some(key=>!['status','completedDate'].includes(key)))){
+  closeModal();
+  return inputAlert('El guardado en Supabase admite estatus y fecha de validación. Conserva el borrador de los demás cambios.');
+ }
+ matrixSaving=true;
+ try{
+  await parent.afalTrialCommit(changes);
+  for(const {key,payload} of changes){
+   const flow=state.flows.find(f=>f.id===key.slice(7));
+   Object.assign(ensureFlowMatrixMeta(flow),payload);
+  }
+  state.bankEdit=null;
+  closeModal();
+  render();
+ }catch(error){
+  closeModal();
+  inputAlert('No se pudo confirmar el guardado. Tu borrador se conserva. '+error.message);
+ }finally{matrixSaving=false}
+}
 function architectureMatrixCell(f,k){if(architectureMatrixEditActive()&&ARCH_MATRIX_EDITABLE_KEYS.has(k))return architectureMatrixEditControl(f,k);return k==='status'?architectureStatusBadge(architectureHomologatedStatus(f)):`<span class="bankReadCell">${esc(bankReportValue(f,k)||'')}</span>`}
 function architectureMatrixEditBar(){if(!architectureMatrixEditActive())return`<button class="btn" type="button" onclick="beginArchitectureMatrixEdit()">Editar matriz</button>`;const c=architectureMatrixSyncCounts();return`<button class="btn" type="button" onclick="discardArchitectureMatrixEdit()">Cancelar edición</button><span class="archMatrixPending" data-arch-edit-summary aria-live="polite">${c.cells?`${c.rows} procedimiento${c.rows===1?'':'s'} · ${c.cells} cambio${c.cells===1?'':'s'} pendiente${c.cells===1?'':'s'}`:'Sin cambios pendientes'}</span><button class="btn primary" data-arch-edit-save type="button" onclick="requestSaveArchitectureMatrix()" ${c.cells?'':'disabled'}>Guardar cambios</button>`}
 function qaArchitectureRows(){return architectureRows().filter(f=>String(f.id||'').startsWith('qa_arch_'))}
