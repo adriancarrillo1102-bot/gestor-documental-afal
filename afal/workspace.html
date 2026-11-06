@@ -1694,6 +1694,13 @@ function restoreStateAfterPersistenceFailure(snapshot){if(!snapshot)return;const
 let afalTrialSaving=false;
 const nomenclatureDisplayTitles=Object.freeze({"flow_mu4h5rr4_7ommg":"Gestionar Riesgos de Incumplimiento","flow_mu4h5rr4_kub64":"Gestionar Riesgos de Incumplimiento","flow_mu4h5rr5_0ptzz":"Gestionar Riesgos de Incumplimiento","flow_mu4mde6d_6tmml":"Gestionar los Exámenes Médicos de los Ingreso y Promoción de los Ejecutivos","flow_mu4h5rqh_dwo9v":"Gestionar las solicitudes de Facturación de ICR","flow_mu4h5rqh_v1dtw":"Gestionar las solicitudes de Facturación de ICR","flow_mu4h5rqu_11wka":"Gestionar elaboración de presupuesto de compensaciones y beneficios","flow_mu4h5rqu_bwy46":"Gestionar elaboración de presupuesto de compensaciones y beneficios","flow_mu4h5rqv_125zp":"Gestionar elaboración de presupuesto de compensaciones y beneficios",flow_mu4h5rrf_hf1iz:'Planear las Compras de los Productos de Inventario de los CEDIS',flow_mu4h5rqi_qkqwg:'Administrar servicio de morralla',flow_mu4h5rqj_xkjn3:'Administrar servicio de morralla'});
 const nomenclatureOriginalTitles=new WeakMap();
+function applySavedMatrixFields(flow,payload){
+ const meta=ensureFlowMatrixMeta(flow);
+ if(Object.hasOwn(payload,'procedureFinal')&&!nomenclatureOriginalTitles.has(flow)){
+  nomenclatureOriginalTitles.set(flow,meta.procedureFinal||meta.procedureOriginal||flowDisplayName(flow));
+ }
+ Object.assign(meta,payload);
+}
 function applyAfalTrialEdits(){
  for(const flow of state.flows){
   const title=nomenclatureDisplayTitles[flow.id];
@@ -1702,13 +1709,14 @@ function applyAfalTrialEdits(){
   nomenclatureOriginalTitles.set(flow,meta.procedureFinal);
   meta.procedureFinal=title;
  }
- for(const {key,payload} of parent.afalTrialEdits||[]){
+ const edits=parent.afalTrialEdits||[];
+ for(const {key,payload} of [...edits.filter(e=>!e.key.startsWith('matrix:')),...edits.filter(e=>e.key.startsWith('matrix:'))]){
   if(key.startsWith('nomenclature:')){
    const flow=state.flows.find(f=>f.id===key.slice('nomenclature:'.length));
    if(flow&&payload.code)ensureFlowMatrixMeta(flow).procedureNumber=payload.code;
   }else if(key.startsWith('matrix:')){
    const flow=state.flows.find(f=>f.id===key.slice(7));
-   if(flow)Object.assign(ensureFlowMatrixMeta(flow),payload);
+   if(flow)applySavedMatrixFields(flow,payload);
   }else if(key.startsWith('implementation:')){
    const id=key.slice('implementation:'.length);
    state.projectImplementation[id]={...readImplementationFor(id),...mutableClone(payload)};
@@ -1930,16 +1938,16 @@ async function commitArchitectureMatrixEdit(){
   return fields.length?[{key:'matrix:'+f.id,payload:Object.fromEntries(fields.map(key=>[key,session.draft[f.id][key]??'']))}]:[];
  });
  if(!changes.length){state.bankEdit=null;closeModal();render();return}
- if(changes.some(change=>Object.keys(change.payload).some(key=>!['status','completedDate'].includes(key)))){
+ if(changes.some(change=>Object.keys(change.payload).some(key=>!['status','completedDate','procedureNumber','procedureFinal'].includes(key)))){
   closeModal();
-  return inputAlert('El guardado en Supabase admite estatus y fecha de validación. Conserva el borrador de los demás cambios.');
+  return inputAlert('Puedes guardar el código, el nombre final, el estatus y la fecha de validación. Conserva el borrador de los demás cambios.');
  }
  matrixSaving=true;
  try{
   await parent.afalTrialCommit(changes);
   for(const {key,payload} of changes){
    const flow=state.flows.find(f=>f.id===key.slice(7));
-   Object.assign(ensureFlowMatrixMeta(flow),payload);
+   applySavedMatrixFields(flow,payload);
   }
   state.bankEdit=null;
   closeModal();
