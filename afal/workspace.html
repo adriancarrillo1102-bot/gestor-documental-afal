@@ -1720,6 +1720,10 @@ function applyAfalTrialEdits(){
   }else if(key.startsWith('implementation:')){
    const id=key.slice('implementation:'.length);
    state.projectImplementation[id]={...readImplementationFor(id),...mutableClone(payload)};
+  }else if(key.startsWith('agenda:')){
+   const [wave,id]=JSON.parse(key.slice(7));
+   const session=(state.projectPlanningSessions[wave]||[]).find(item=>item.id===id);
+   if(session)applyCalendarAgendaState(session,payload);
   }else if(key.startsWith('attendance:')){
    const [,wave,id]=JSON.parse(key.slice('attendance:'.length));
    const plan=projectWavePlan(wave);
@@ -3386,13 +3390,32 @@ function followupClosedViolation(){
  }
  return '';
 }
+function applyCalendarAgendaState(session,payload){
+ session.agendaClosed=payload.agendaClosed;
+ if(payload.agendaClosed){
+  session.closedParticipants=payload.closedParticipants;
+  session.agendaClosedAt=payload.agendaClosedAt;
+ }else{
+  delete session.closedParticipants;
+  delete session.agendaClosedAt;
+ }
+}
 async function followupToggleAgenda(id){
  const session=projectPlanningSessionStore().find(s=>s.id===id);if(!session)return false;
  const before=snapshotStateForPersistence();
  if(session.agendaClosed){session.agendaClosed=false;delete session.closedParticipants;delete session.agendaClosedAt}
  else{session.closedParticipants=followupLiveParticipants(session);session.agendaClosedAt=new Date().toISOString();session.agendaClosed=true}
  // closedProcedureKeys de versiones anteriores se conserva como dato legado, sin limitar la relación de procedimientos.
- if(!await persistStateChange(before,'No se guardó el estado de la agenda.'))return false;
+ try{
+  await parent.afalTrialCommit([{
+   key:'agenda:'+JSON.stringify([projectWaveKey(),id]),
+   payload:{agendaClosed:session.agendaClosed,closedParticipants:session.closedParticipants||[],agendaClosedAt:session.agendaClosedAt||''}
+  }]);
+ }catch(error){
+  restoreStateAfterPersistenceFailure(before);
+  inputAlert('No se guardó el estado de la agenda. '+error.message);
+  return false;
+ }
  closeModal();poolSelectedSession=id;renderProjectView();return true;
 }
 function followupAgendaHtml(session){return `<div class="followupAgendaStatus ${session.agendaClosed?'closed':'open'}"><b>${session.agendaClosed?'🔒 Agenda de participantes cerrada':'Agenda de participantes habilitada'}</b><span>${session.agendaClosed?'La lista de participantes está confirmada. Puedes relacionar o ajustar procedimientos. Habilita la agenda únicamente para agregar nuevas personas.':'Los participantes se agendan desde Stakeholders según su disponibilidad. Los procedimientos se pueden definir después.'}</span><button class="btn" data-id="${esc(session.id)}" onclick="followupToggleAgenda(this.dataset.id)">${session.agendaClosed?'Habilitar agenda':'Cerrar agenda'}</button></div>`}
