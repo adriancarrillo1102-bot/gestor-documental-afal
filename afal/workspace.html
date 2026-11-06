@@ -1694,7 +1694,10 @@ function restoreStateAfterPersistenceFailure(snapshot){if(!snapshot)return;const
 let afalTrialSaving=false;
 function applyAfalTrialEdits(){
  for(const {key,payload} of parent.afalTrialEdits||[]){
-  if(key.startsWith('implementation:')){
+  if(key.startsWith('nomenclature:')){
+   const flow=state.flows.find(f=>f.id===key.slice('nomenclature:'.length));
+   if(flow&&payload.code)ensureFlowMatrixMeta(flow).procedureNumber=payload.code;
+  }else if(key.startsWith('implementation:')){
    const id=key.slice('implementation:'.length);
    state.projectImplementation[id]={...readImplementationFor(id),...mutableClone(payload)};
   }else if(key.startsWith('attendance:')){
