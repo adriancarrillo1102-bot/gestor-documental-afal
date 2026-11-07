@@ -28,6 +28,14 @@ async function openTrial(){
  if(snapshot.docs?.length!==2004)throw Error('El número de registros no coincide.');
  const edits=await client.rpc('afal_trial_read_edits');
  if(edits.error)throw Error(edits.error.message);
+ const firstOrganization=await client.rpc('afal_organization_read',{p_offset:0,p_limit:500});
+ if(firstOrganization.error)throw Error('No se pudo cargar el catálogo de dependencias. '+firstOrganization.error.message);
+ const total=firstOrganization.data.total;
+ const pages=await Promise.all(Array.from({length:Math.max(0,Math.ceil(total/500)-1)},(_,i)=>client.rpc('afal_organization_read',{p_offset:(i+1)*500,p_limit:500})));
+ if(pages.some(page=>page.error))throw Error('No se pudo completar el catálogo de dependencias. Recarga AFAL.');
+ const organization=[...firstOrganization.data.rows,...pages.flatMap(page=>page.data.rows)];
+ if(organization.length!==total||new Set(organization.map(r=>r.id)).size!==total)throw Error('El catálogo de dependencias está incompleto. Recarga AFAL.');
+ window.afalOrganization=organization;
  const versions=new Map(edits.data.map(x=>[x.key,x.version]));
  window.afalTrialEdits=edits.data;
  window.afalTrialCommit=async changes=>{
@@ -45,7 +53,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261107-personas-compacto-2';
+ frame.src='workspace.html?v=20261107-direcciones-1';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';
