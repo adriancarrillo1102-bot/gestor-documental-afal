@@ -53,7 +53,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261109-planificacion-1';
+ frame.src='workspace.html?v=20261109-sesion-compartida-1';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';
@@ -82,7 +82,7 @@ exit.onclick=async()=>{await client.auth.signOut({scope:'local'});location.reloa
 const {data:gestor}=await gestorClient.auth.getSession();
 if(gestor.session){
  const {data:role}=await gestorClient.rpc('afal_trial_access_role');
- if(role==='manager')client=gestorClient;
+ if(['manager','admin','viewer'].includes(role))client=gestorClient;
 }
 const {data}=await client.auth.getSession();
 if(data.session)try{await openTrial()}catch(e){status.textContent=e.message}
