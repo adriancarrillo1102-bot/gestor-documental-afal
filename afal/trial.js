@@ -53,7 +53,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261109-sesion-compartida-1';
+ frame.src='workspace.html?v=20261109-sesion-compartida-2';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';
@@ -79,13 +79,28 @@ login.onsubmit=async event=>{
  }catch(e){status.textContent=e.message}finally{button.disabled=false}
 };
 exit.onclick=async()=>{await client.auth.signOut({scope:'local'});location.reload()};
-const {data:gestor}=await gestorClient.auth.getSession();
-if(gestor.session){
- const {data:role}=await gestorClient.rpc('afal_trial_access_role');
- if(['manager','admin','viewer'].includes(role))client=gestorClient;
+async function openExistingSession(){
+ status.textContent='Comprobando la sesión de Control Documental…';
+ try{
+  const {data:gestor}=await gestorClient.auth.getSession();
+  if(gestor.session){
+   const {data:role,error}=await gestorClient.rpc('afal_trial_access_role');
+   if(error)throw error;
+   if(['manager','admin','viewer'].includes(role)){
+    client=gestorClient;
+    await openTrial();
+    return;
+   }
+  }
+  const {data:afal}=await afalClient.auth.getSession();
+  if(afal.session){await openTrial();return;}
+  status.textContent=gestor.session?'La sesión de Control Documental no tiene acceso a AFAL.':'';
+  login.hidden=false;
+ }catch(error){
+  status.textContent='No se pudo abrir la sesión de AFAL. '+error.message+' Recarga la página para reintentar.';
+ }
 }
-const {data}=await client.auth.getSession();
-if(data.session)try{await openTrial()}catch(e){status.textContent=e.message}
+await openExistingSession();
 
 const createForm=document.getElementById('createAccount');
 const reveal=document.getElementById('showInitial');
