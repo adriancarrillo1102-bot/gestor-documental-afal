@@ -1749,19 +1749,15 @@ async function persistAfalTrial(before,message,scope){
   if(!scope||afalTrialSaving)throw Error('Otro guardado está en curso o la operación está fuera del piloto.');
   if(typeof parent.afalTrialCommit!=='function')throw Error('Abre la copia desde el acceso privado de AFAL.');
   const changes=[];
-  if(scope.kind==='attendance'){
-   changes.push({key:'attendance:'+JSON.stringify(['session',scope.wave,scope.id]),payload:projectWavePlan(scope.wave).attendance[scope.id]});
-  }else{
-   for(const id of scope.ids){
-    const d=readImplementationFor(id);
-    const payload={};
-    const commands=scope.commands?.filter(c=>c.unit.f.id===id)||[];
-    const fields=scope.operation==='team'?['unifiedDocumentationTeam']:['sessionsByWave','sessions','updatedAt',...(commands.some(c=>c.role==='additional')?['additionalCompanions']:[])];
-    for(const field of fields){
-     if(Object.hasOwn(d,field))payload[field]=d[field];
-    }
-    changes.push({key:'implementation:'+id,payload,operation:scope.operation,participants:[...new Set(commands.map(c=>c.person.key))]});
+  for(const id of scope.ids){
+   const d=readImplementationFor(id);
+   const payload={};
+   const commands=scope.commands?.filter(c=>c.unit.f.id===id)||[];
+   const fields=scope.operation==='team'?['unifiedDocumentationTeam']:['sessionsByWave','sessions','updatedAt',...(commands.some(c=>c.role==='additional')?['additionalCompanions']:[])];
+   for(const field of fields){
+    if(Object.hasOwn(d,field))payload[field]=d[field];
    }
+   changes.push({key:'implementation:'+id,payload,operation:scope.operation,participants:[...new Set(commands.map(c=>c.person.key))]});
   }
   if(!changes.length)return true;
   afalTrialSaving=true;
@@ -3334,10 +3330,60 @@ function pool9OpenAttendance(id){
  const session=projectPlanningSessionStore().find(s=>s.id===id);if(!session)return;
  const people=pool9AttendanceRows(session),labels=pool9AttendanceLabels();
  pool9AttendanceDraft={id,wave:state.projectWave,before:JSON.stringify(pool9AttendanceStore()[id]||{}),keys:people.map(p=>p.key)};
- openModal(`<h3 id="modalTitle">Registrar asistencia</h3><div class="attendanceEditor"><div class="attendanceSessionStrip"><div><b>${esc(session.title)}</b><span>${esc(session.date)} · ${esc(session.startTime)}–${esc(session.endTime)}</span></div><span class="attendancePeopleCount">${people.length} participantes</span></div><div class="attendanceTools"><button class="btn" id="attendanceFillPending" onclick="pool9AttendanceFillPending()">✓ Marcar pendientes como asistió</button><span class="mini">Ajusta las excepciones y guarda.</span></div><div id="attendanceSummary" class="attendanceSummary" role="status" aria-live="polite"></div><div class="attendanceRows">${people.map((person,index)=>{const status=person.status||'',needsComment=['absent','justified'].includes(status);return `<article class="attendanceCompactRow" data-att-row="${index}"><div class="attendancePerson"><b>${esc(person.name)}</b>${person.archived?'<span>Registro previo</span>':''}</div><div class="attendanceChoices" role="group" aria-label="Asistencia de ${esc(person.name)}">${Object.entries(labels).map(([value,label])=>`<button type="button" class="attendanceChoice ${status===value?'isActive':''}" data-att-status="${value}" aria-pressed="${status===value}" onclick="pool9AttendanceStatusSet(${index},'${value}')">${esc(label)}</button>`).join('')}<button type="button" class="attendanceClear" aria-label="Quitar registro de ${esc(person.name)}" title="Dejar sin registrar; se aplicará al guardar" onclick="pool9AttendanceStatusSet(${index},'')">×</button></div><input type="hidden" id="attStatus${index}" value="${esc(status)}"><div class="attendanceComment" id="attCommentWrap${index}" ${needsComment?'':'hidden'}><label id="attCommentLabel${index}" for="attComment${index}">${status==='justified'?'Motivo de la ausencia justificada':'Motivo de la ausencia'}</label><textarea id="attComment${index}" aria-label="Comentario de ${esc(person.name)}" rows="2" placeholder="${status==='justified'?'Escribe la justificación…':'Escribe el motivo o comentario…'}">${esc(person.comment||'')}</textarea></div></article>`}).join('')||'<p>Sin participantes.</p>'}</div></div><div class="modalactions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="pool9SaveAttendance()">Guardar asistencia</button></div>`);
+ openModal(`<h3 id="modalTitle">Registrar asistencia</h3><div class="attendanceEditor"><div class="attendanceSessionStrip"><div><b>${esc(session.title)}</b><span>${esc(session.date)} · ${esc(session.startTime)}–${esc(session.endTime)}</span></div><span class="attendancePeopleCount">${people.length} participantes</span></div><div class="attendanceTools"><button class="btn" id="attendanceFillPending" onclick="pool9AttendanceFillPending()">✓ Marcar pendientes como asistió</button><span class="mini">Ajusta las excepciones y guarda.</span></div><div id="attendanceSummary" class="attendanceSummary" role="status" aria-live="polite"></div><div class="attendanceRows">${people.map((person,index)=>{const status=person.status||'',needsComment=['absent','justified'].includes(status);return `<article class="attendanceCompactRow" data-att-row="${index}"><div class="attendancePerson"><b>${esc(person.name)}</b>${person.archived?'<span>Registro previo</span>':''}</div><div class="attendanceChoices" role="group" aria-label="Asistencia de ${esc(person.name)}">${Object.entries(labels).map(([value,label])=>`<button type="button" class="attendanceChoice ${status===value?'isActive':''}" data-att-status="${value}" aria-pressed="${status===value}" onclick="pool9AttendanceStatusSet(${index},'${value}')">${esc(label)}</button>`).join('')}<button type="button" class="attendanceClear" aria-label="Quitar registro de ${esc(person.name)}" title="Dejar sin registrar; se aplicará al guardar" onclick="pool9AttendanceStatusSet(${index},'')">×</button></div><input type="hidden" id="attStatus${index}" value="${esc(status)}"><div class="attendanceComment" id="attCommentWrap${index}" ${needsComment?'':'hidden'}><label id="attCommentLabel${index}" for="attComment${index}">${status==='justified'?'Motivo de la ausencia justificada':'Motivo de la ausencia'}</label><textarea id="attComment${index}" aria-label="Comentario de ${esc(person.name)}" rows="2" placeholder="${status==='justified'?'Escribe la justificación…':'Escribe el motivo o comentario…'}">${esc(person.comment||'')}</textarea></div></article>`}).join('')||'<p>Sin participantes.</p>'}</div></div><div class="modalactions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" id="attendanceSaveButton" onclick="pool9SaveAttendance()">Guardar asistencia</button><p id="attendanceSaveMessage" role="status" aria-live="polite"></p></div>`);
  $('#modal').classList.add('pool9SessionModal');pool9AttendanceRefresh();
 }
-async function pool9SaveAttendance(){const d=pool9AttendanceDraft;if(!d||d.wave!==state.projectWave)return inputAlert('La ola cambió. Abre la asistencia de nuevo.');const s=projectPlanningSessionStore().find(s=>s.id===d.id);if(!s||JSON.stringify(pool9AttendanceStore()[d.id]||{})!==d.before)return inputAlert('La sesión o su asistencia cambió. Abre de nuevo el registro.');const people=new Map(pool9AttendanceRows(s).map(p=>[p.key,p])),next={};for(let i=0;i<d.keys.length;i++){const key=d.keys[i],p=people.get(key),status=$('#attStatus'+i).value,comment=$('#attComment'+i).value.trim();if(status&&!pool9AttendanceLabels()[status])return inputAlert('Asistencia no válida.');if(status){if(!p)return inputAlert('Los participantes cambiaron. Abre de nuevo.');next[key]={status,comment,name:p.name,role:p.role||'',updatedAt:new Date().toISOString()}}}const before=snapshotStateForPersistence();projectWavePlan().attendance={...pool9AttendanceStore(),[d.id]:next};if(!await persistAfalTrial(before,'No se guardó la asistencia.',{kind:'attendance',wave:d.wave,id:d.id}))return false;pool9AttendanceDraft=null;closeModal();renderProjectView();return true}
+function attendanceValue(entry){return entry?.status?JSON.stringify([entry.status,String(entry.comment||'').trim()]):''}
+function mergeAttendanceDraft(base,latest,changes){
+ const payload={...latest},conflicts=[];
+ for(const [key,entry] of changes){
+  const current=attendanceValue(latest[key]),wanted=attendanceValue(entry);
+  if(current===wanted)continue;
+  if(current!==attendanceValue(base[key])){conflicts.push(key);continue;}
+  if(entry)payload[key]=entry;
+  else delete payload[key];
+ }
+ return {payload,conflicts};
+}
+async function pool9SaveAttendance(){
+ const draft=pool9AttendanceDraft;
+ const message=$('#attendanceSaveMessage'),button=$('#attendanceSaveButton');
+ if(!draft||draft.saving||!message||!button)return false;
+ if(draft.wave!==state.projectWave){message.textContent='La ola cambió. Abre la asistencia de nuevo.';return false;}
+ const session=projectPlanningSessionStore().find(s=>s.id===draft.id);
+ if(!session){message.textContent='La sesión cambió. Abre de nuevo el registro.';return false;}
+ const people=new Map(pool9AttendanceRows(session).map(p=>[p.key,p]));
+ const base=JSON.parse(draft.before),changes=new Map();
+ for(const [index,key] of draft.keys.entries()){
+  const person=people.get(key),status=$('#attStatus'+index).value,comment=$('#attComment'+index).value.trim();
+  if(status&&(!person||!pool9AttendanceLabels()[status])){message.textContent='Los participantes o los estados cambiaron. Abre de nuevo el registro.';return false;}
+  const entry=status?{status,comment,name:person.name,role:person.role||'',updatedAt:new Date().toISOString()}:null;
+  if(attendanceValue(entry)!==attendanceValue(base[key]))changes.set(key,entry);
+ }
+ const key='attendance:'+JSON.stringify(['session',draft.wave,draft.id]);
+ draft.saving=true;button.disabled=true;message.textContent='Guardando asistencia…';
+ try{
+  for(let attempt=0;attempt<2;attempt++){
+   const saved=await parent.afalTrialReadEdit(key);
+   const latest=saved?.payload??projectWavePlan(draft.wave).attendance?.[draft.id]??base;
+   const {payload,conflicts}=mergeAttendanceDraft(base,latest,changes);
+   if(conflicts.length){
+    const names=conflicts.map(id=>people.get(id)?.name||id).join(', ');
+    message.textContent='Otra captura cambió la asistencia de '+names+'. Conservé tus cambios en este formulario. Consulta el registro actualizado en otra pestaña antes de volver a capturar esos cambios.';
+    return false;
+   }
+   if(JSON.stringify(payload)!==JSON.stringify(latest)){
+    try{await parent.afalTrialCommit([{key,payload,version:saved?.version??0}]);}
+    catch(error){if(attempt===0&&['PT409','40001'].includes(error.code))continue;throw error;}
+   }
+   const plan=projectWavePlan(draft.wave);
+   plan.attendance={...(plan.attendance||{}),[draft.id]:payload};
+   if(pool9AttendanceDraft===draft&&$('#attendanceSaveMessage')===message){pool9AttendanceDraft=null;closeModal();renderProjectView();}
+   return true;
+  }
+ }catch(error){message.textContent='No se guardó la asistencia. '+error.message;return false;}
+ finally{draft.saving=false;button.disabled=false;}
+}
 function pool9AttendanceSummary(key){const rows=projectPlanningSessionStore().flatMap(s=>pool9AttendanceRows(s).filter(p=>p.key===key)),counts={attended:0,absent:0,justified:0,partial:0,unregistered:0};let hours=0;for(const r of rows){counts[r.status||'unregistered']++;hours+=Math.max(0,sessionMinutes(r.session.endTime)-sessionMinutes(r.session.startTime))/60}return {rows,counts,hours}}
 function pool9StakeholderAttendance(key){const {rows,counts,hours}=pool9AttendanceSummary(key);return `<h4>Detalle de asistencia · ${esc(state.projectWave)}</h4><p>${rows.length} sesiones · ${hours} h en sesiones · ${counts.attended} asistencias · ${counts.absent} ausencias · ${counts.justified} justificadas · ${counts.partial} parciales · ${counts.unregistered} sin registrar</p><div class="stakeholderDetailTableWrap"><table class="stakeholderDetailTable"><thead><tr><th>Sesión / fecha</th><th>Horario</th><th>Asistencia</th><th>Comentario</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.session.title)}<br>${esc(r.session.date)}</td><td>${esc(r.session.startTime)}–${esc(r.session.endTime)}</td><td class="att-${esc(r.status||'')}">${esc(pool9AttendanceLabels()[r.status]||'Sin registrar')}</td><td>${esc(r.comment||'')}</td></tr>`).join('')||'<tr><td colspan="4">Sin sesiones vinculadas.</td></tr>'}</tbody></table></div>`}
 function pool9WeeklyAttendanceRows(){const weeks=planningWeekEntries(),idx=Math.max(0,Math.min(weeks.length-1,Number(state.projectCalendarWeekIndex?.[projectWaveKey()]||0))),start=weeks[idx]?.[0];if(!start)return [];const end=stakeholderAddDays(start,6);return projectPlanningSessionStore().filter(s=>s.date>=start&&s.date<=end).flatMap(s=>pool9AttendanceRows(s).map(p=>[s.title,s.date,p.name,pool9AttendanceLabels()[p.status]||'Sin registrar',p.comment||'']))}

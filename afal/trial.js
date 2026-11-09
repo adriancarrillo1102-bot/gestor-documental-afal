@@ -38,13 +38,18 @@ async function openTrial(){
  window.afalOrganization=organization;
  const versions=new Map(edits.data.map(x=>[x.key,x.version]));
  window.afalTrialEdits=edits.data;
+ window.afalTrialReadEdit=async key=>{
+  const {data,error}=await client.rpc('afal_trial_read_edits').abortSignal(AbortSignal.timeout(15000));
+  if(error)throw Error(error.message);
+  return data.find(edit=>edit.key===key)||null;
+ };
  window.afalTrialCommit=async changes=>{
   if(role==='viewer')throw Error('Tu cuenta tiene acceso de sólo lectura.');
-  const batch=changes.map(c=>({...c,version:versions.get(c.key)||0}));
+  const batch=changes.map(c=>({...c,version:c.version??(versions.get(c.key)||0)}));
   const saved=await client.rpc('afal_trial_write_edits',{p_changes:batch}).abortSignal(AbortSignal.timeout(15000));
   if(saved.error){
    const error=saved.error;
-   if(error.code==='40001'||error.code==='PT409')throw Error('Otro guardado cambió este registro. Recarga AFAL antes de reintentar.');
+   if(error.code==='40001'||error.code==='PT409')throw Object.assign(Error('Otro guardado cambió este registro. Recarga AFAL antes de reintentar.'),{code:error.code});
    if(/abort|timeout/i.test(error.message||''))throw Error('No se pudo confirmar el guardado a tiempo. Recarga AFAL para comprobar si se aplicó antes de reintentar.');
    throw Error(error.message);
   }
@@ -53,7 +58,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261109-sesion-compartida-2';
+ frame.src='workspace.html?v=20261109-asistencia-1';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';
