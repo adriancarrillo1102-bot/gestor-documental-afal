@@ -21,22 +21,32 @@ export async function handler(req:Request){
   if(!/^[a-f0-9]{8}-[a-f0-9-]{27}$/i.test(id)||!([sourceHash,pdfHash].every(x=>/^[a-f0-9]{64}$/.test(x)))||!(pdf instanceof File)||pdf.size<5||pdf.size>PDF_LIMIT)return reply({error:'Datos de PDF inválidos'},400);
   const f=await db.from('gd_files').select('*').eq('id',id).eq('state','ready').maybeSingle();if(f.error||!f.data||f.data.sha256!==sourceHash)return reply({error:'El original no coincide con el registro'},409);
   const d=await db.from('gd_documents').select('id,type,code').eq('id',f.data.document_id).is('deleted_at',null).maybeSingle();
-  if(d.error||!d.data||(d.data.type==='PRO'||!supported(f.data.name)))return reply({error:'Documento no disponible para esta carga'},409);
+  if(d.error||!d.data||(!supported(f.data.name)||(d.data.type==='PRO'&&!/\.(xlsx?|xlsm)$/i.test(f.data.name))))return reply({error:'Documento no disponible para esta carga'},409);
   const bytes=new Uint8Array(await pdf.arrayBuffer());if(!isPdf(bytes)||await sha(bytes)!==pdfHash)return reply({error:'El PDF no coincide con su huella de verificación'},409);
-  const bucket='gd-vistas-pdf',path=sourcePath(f.data),old=await db.storage.from(bucket).download(path);let previousHash=null,backupPath=null;
+  const bucket='gd-vistas-pdf',path=sourcePath(f.data),old=await db.storage.from(bucket).download(path);let previousHash=null;
+  const pair=await db.from('gd_pdf_consultations').select('source_id').eq('source_id',id).maybeSingle();
+  if(pair.error||(d.data.type==='PRO'&&!pair.data))return reply({error:'PDF final sin vínculo confirmado'},409);
   if(old.data){
    const previous=new Uint8Array(await old.data.arrayBuffer());previousHash=await sha(previous);
    if(previousHash===pdfHash)return reply({state:'ready',code:d.data.code,bucket,path,pdf_sha256:pdfHash,pdf_bytes:bytes.length,already_saved:true});
    if(form.get('replace')!=='true'||form.get('expected_existing_sha256')!==previousHash)return reply({error:'El PDF existente cambió; se requiere revisión antes de reemplazarlo'},409);
-   backupPath=path+'.backup.'+previousHash+'.pdf';const saved=await db.storage.from(bucket).upload(backupPath,previous,{contentType:'application/pdf',upsert:false});
-   if(saved.error){const check=await db.storage.from(bucket).download(backupPath);if(!check.data||await sha(new Uint8Array(await check.data.arrayBuffer()))!==previousHash)return reply({error:'No se pudo respaldar la vista anterior'},502)}
   }
   const active=await db.from('gd_documents').select('id').eq('id',f.data.document_id).is('deleted_at',null).maybeSingle();if(!active.data)return reply({error:'Registro cancelado durante la carga'},409);
   const saved=await db.storage.from(bucket).upload(path,bytes,{contentType:'application/pdf',upsert:!!old.data,cacheControl:'0'});if(saved.error)return reply({error:'No se pudo guardar el PDF'},502);
-  const verified=await db.storage.from(bucket).download(path);if(!verified.data||await sha(new Uint8Array(await verified.data.arrayBuffer()))!==pdfHash)return reply({error:'La verificación del PDF guardado falló'},502);
-  const audit=await db.from('gd_audit').insert({document_id:f.data.document_id,action:old.data?'PDF de consulta corregido':'PDF de consulta importado',actor:user.data.user.id,reason:JSON.stringify({file_id:id,source_sha256:sourceHash,pdf_sha256:pdfHash,pdf_bytes:bytes.length,previous_sha256:previousHash,backup_path:backupPath,original_unchanged:true})});
+  const verified=await db.storage.from(bucket).download(path);if(!verified.data||await sha(new Uint8Array(await verified.data.arrayBuffer()))!==pdfHash){
+   if(old.data)await db.storage.from(bucket).upload(path,old.data,{contentType:'application/pdf',upsert:true,cacheControl:'0'});
+   return reply({error:'La verificación del PDF guardado falló'},502);
+  }
+  if(pair.data){
+   const updated=await db.from('gd_pdf_consultations').update({pdf_sha256:pdfHash,size:bytes.length}).eq('source_id',id).select('source_id').single();
+   if(updated.error){
+    if(old.data)await db.storage.from(bucket).upload(path,old.data,{contentType:'application/pdf',upsert:true,cacheControl:'0'});
+    return reply({error:'No se pudo confirmar el PDF final'},502);
+   }
+  }
+  const audit=await db.from('gd_audit').insert({document_id:f.data.document_id,action:old.data?'PDF de consulta corregido':'PDF de consulta importado',actor:user.data.user.id,reason:JSON.stringify({file_id:id,source_sha256:sourceHash,pdf_sha256:pdfHash,pdf_bytes:bytes.length,previous_sha256:previousHash,original_unchanged:true})});
   if(audit.error)return reply({error:'PDF guardado y verificado; no se pudo completar la bitácora'},502);
-  return reply({state:'ready',code:d.data.code,bucket,path,pdf_sha256:pdfHash,pdf_bytes:bytes.length,backup_created:!!backupPath,verified:true});
+  return reply({state:'ready',code:d.data.code,bucket,path,pdf_sha256:pdfHash,pdf_bytes:bytes.length,verified:true});
  }catch(e){return reply({error:e instanceof Error?e.message:'No se pudo cargar el PDF'},500)}
 }
 Deno.serve(handler);
