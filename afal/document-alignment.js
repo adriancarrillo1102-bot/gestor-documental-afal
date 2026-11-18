@@ -64,6 +64,7 @@ renderBankMatrix = function () {
  header.innerHTML = '<div>Vínculo documental</div><button class="btn" type="button" onclick="refreshDocumentAlignment(true)">↻ Comprobar</button>';
  finalHeader.after(header);
  const column = document.createElement('col');
+ column.dataset.colKey = '_documentAlignment';
  column.style.width = '170px';
  table.querySelector('colgroup').children[[...finalHeader.parentElement.children].indexOf(finalHeader)]?.after(column);
  const flowIndex = new Map(architectureRows().map(flow => [flow.id,flow]));
