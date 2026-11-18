@@ -156,17 +156,38 @@ async function alignmentDocumentPicked(documentId) {
   draft.preview = await parent.afalAlignmentPreview([draft.flowId],documentId || null);
   draft.requestId = crypto.randomUUID();
   const group = unifiedProcedure(state.flows.find(f => f.id === draft.flowId));
-  draft.destination = group?.anchor.id || draft.flowId;
-  draft.leadId = group?.lead?.id || '';
-  draft.companionId = group?.companion?.id || '';
+  const savedDestination = draft.preview.architecture.sources.find(source => {
+   const team = source.implementation?.unifiedDocumentationTeam;
+   if (!team?.signature) return false;
+   try {
+    const signature = JSON.parse(team.signature);
+    const current = alignmentPreviewSource(source.id);
+    const key = matrixUnifiedKey({procedureNumber:current.code,procedureFinal:current.title});
+    const explicitEvent = (parent.afalProcedureHistory || []).find(event =>
+     'explicit-final:'+event.id === signature[0] && event.final.code === current.code && event.final.name === current.title);
+    return (signature[0] === key || !!explicitEvent) && JSON.stringify(signature[1]) === JSON.stringify(draft.preview.architecture.ids);
+   } catch {return false;}
+  });
+  const savedTeam = savedDestination?.implementation.unifiedDocumentationTeam;
+  draft.destination = savedDestination?.id || group?.anchor.id || draft.flowId;
+  draft.leadId = savedTeam?.leadId || group?.lead?.id || '';
+  draft.companionId = savedTeam?.companionId || group?.companion?.id || '';
   showDocumentAlignment();
  } catch (error) { inputAlert(error.message); }
+}
+
+function alignmentPreviewSource(id) {
+ const source = documentAlignmentDraft.preview.architecture.sources.find(s => s.id === id);
+ // Older approved display corrections predate persisted matrix fields.
+ // A newer saved field always takes precedence over that legacy display name.
+ const title = Object.hasOwn(source.matrix || {},'procedureFinal') ? source.title : nomenclatureDisplayTitles[id] || source.title;
+ return {...source,title};
 }
 
 function showDocumentAlignment() {
  const d = documentAlignmentDraft;
  const preview = d.preview;
- const source = preview.architecture.sources.find(s => s.id === d.flowId);
+ const source = alignmentPreviewSource(d.flowId);
  const doc = preview.document;
  const records = (parent.afalDocumentCatalog?.documents || []).filter(x => !x.deletedAt);
  const same = doc && source.code.trim().toUpperCase() === doc.code && alignmentName(source.title) === alignmentName(doc.name);
@@ -198,7 +219,7 @@ function showDocumentAlignment() {
 
 function useAlignmentValue(field, platform) {
  const d = documentAlignmentDraft;
- const source = d.preview.architecture.sources.find(s => s.id === d.flowId);
+ const source = alignmentPreviewSource(d.flowId);
  const value = platform === 'gestor' ? d.preview.document[field] : field === 'name' ? source.title : source.code;
  document.getElementById(field === 'name' ? 'alignmentName' : 'alignmentCode').value = value;
 }
