@@ -13,6 +13,7 @@ async function openTrial(){
  const [{data:role,error:roleError},{data:auth,error:authError}]=await Promise.all([client.rpc('afal_trial_access_role'),client.auth.getUser()]);
  if(roleError||authError||!role)throw Error('La cuenta no tiene acceso a AFAL.');
  const labels={manager:'Administrador general',admin:'Administrador',viewer:'Consultante'};
+ window.afalCanEdit=role!=='viewer';
  document.getElementById('identity').textContent=auth.user.email.replace(/@afal-users\.invalid$/i,'')+' · '+labels[role];
  status.textContent='Leyendo la copia privada de Supabase…';
  const chunks=[];
@@ -38,6 +39,13 @@ async function openTrial(){
  window.afalOrganization=organization;
  const versions=new Map(edits.data.map(x=>[x.key,x.version]));
  window.afalTrialEdits=edits.data;
+ window.afalReadDocumentCatalog=async()=>{
+  const {data,error}=await client.rpc('afal_document_alignment_catalog').abortSignal(AbortSignal.timeout(15000));
+  if(error)throw Error(error.message);
+  window.afalDocumentCatalog=data;
+  return data;
+ };
+ try{await window.afalReadDocumentCatalog();}catch{window.afalDocumentCatalog=null;}
  const procedureHistory=await client.rpc('afal_procedure_history');
  if(procedureHistory.error)throw Error(procedureHistory.error.message);
  window.afalProcedureHistory=procedureHistory.data;
@@ -46,17 +54,31 @@ async function openTrial(){
   if(error)throw Error(error.message);
   return data;
  };
- window.afalConfirmProcedure=async request=>{
-  if(role==='viewer')throw Error('Tu cuenta tiene acceso de sólo lectura.');
-  const {data,error}=await client.rpc('afal_confirm_procedure',{p_request:request}).abortSignal(AbortSignal.timeout(30000));
+ window.afalAlignmentPreview=async(ids,documentId)=>{
+  const {data,error}=await client.rpc('afal_alignment_preview',{p_ids:ids,p_document:documentId}).abortSignal(AbortSignal.timeout(15000));
   if(error)throw Error(error.message);
+  return data;
+ };
+ const refreshIdentityState=async data=>{
   for(const [key,version] of Object.entries(data.versions||{}))versions.set(key,version);
-  const [latest,history]=await Promise.all([client.rpc('afal_trial_read_edits'),client.rpc('afal_procedure_history')]);
+  const [latest,history]=await Promise.all([client.rpc('afal_trial_read_edits'),client.rpc('afal_procedure_history'),window.afalReadDocumentCatalog()]);
   if(latest.error||history.error)throw Error('La operación se guardó. Recarga AFAL para consultar el resultado.');
   window.afalTrialEdits=latest.data;
   window.afalProcedureHistory=history.data;
   for(const edit of latest.data)versions.set(edit.key,edit.version);
   return data;
+ };
+ window.afalConfirmAlignment=async request=>{
+  if(role==='viewer')throw Error('Tu cuenta tiene acceso de sólo lectura.');
+  const {data,error}=await client.rpc('afal_confirm_alignment',{p_request:request}).abortSignal(AbortSignal.timeout(30000));
+  if(error)throw Error(error.message);
+  return refreshIdentityState(data);
+ };
+ window.afalConfirmProcedure=async request=>{
+  if(role==='viewer')throw Error('Tu cuenta tiene acceso de sólo lectura.');
+  const {data,error}=await client.rpc('afal_confirm_procedure',{p_request:request}).abortSignal(AbortSignal.timeout(30000));
+  if(error)throw Error(error.message);
+  return refreshIdentityState(data);
  };
  window.afalTrialReadEdits=async ()=>{
   const {data,error}=await client.rpc('afal_trial_read_edits').abortSignal(AbortSignal.timeout(15000));
@@ -79,7 +101,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261118-unificacion-explicita-1';
+ frame.src='workspace.html?v=20261118-alineacion-1';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';
