@@ -38,6 +38,26 @@ async function openTrial(){
  window.afalOrganization=organization;
  const versions=new Map(edits.data.map(x=>[x.key,x.version]));
  window.afalTrialEdits=edits.data;
+ const procedureHistory=await client.rpc('afal_procedure_history');
+ if(procedureHistory.error)throw Error(procedureHistory.error.message);
+ window.afalProcedureHistory=procedureHistory.data;
+ window.afalProcedurePreview=async ids=>{
+  const {data,error}=await client.rpc('afal_procedure_preview',{p_ids:ids}).abortSignal(AbortSignal.timeout(15000));
+  if(error)throw Error(error.message);
+  return data;
+ };
+ window.afalConfirmProcedure=async request=>{
+  if(role==='viewer')throw Error('Tu cuenta tiene acceso de sólo lectura.');
+  const {data,error}=await client.rpc('afal_confirm_procedure',{p_request:request}).abortSignal(AbortSignal.timeout(30000));
+  if(error)throw Error(error.message);
+  for(const [key,version] of Object.entries(data.versions||{}))versions.set(key,version);
+  const [latest,history]=await Promise.all([client.rpc('afal_trial_read_edits'),client.rpc('afal_procedure_history')]);
+  if(latest.error||history.error)throw Error('La operación se guardó. Recarga AFAL para consultar el resultado.');
+  window.afalTrialEdits=latest.data;
+  window.afalProcedureHistory=history.data;
+  for(const edit of latest.data)versions.set(edit.key,edit.version);
+  return data;
+ };
  window.afalTrialReadEdits=async ()=>{
   const {data,error}=await client.rpc('afal_trial_read_edits').abortSignal(AbortSignal.timeout(15000));
   if(error)throw Error(error.message);
@@ -59,7 +79,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261113-arquitectura-1';
+ frame.src='workspace.html?v=20261118-unificacion-explicita-1';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';
