@@ -1,6 +1,51 @@
 let documentAlignmentDraft = null;
 let alignmentRefreshInFlight = null;
 let alignmentLastChecked = Date.parse(parent.afalDocumentCatalog?.checkedAt || '') || 0;
+let alignmentFilter = 'all';
+let alignmentRenderingMatrix = false;
+const ALIGNMENT_FILTERS = [
+ ['all','Todos los vínculos'],['alerts','Solo con alertas'],['matched','Coinciden'],
+ ['different','Diferencias de código o nombre'],['unlinked','Sin vincular'],['unchecked','Sin comprobar']
+];
+
+function alignmentFilterMatches(comparison) {
+ if (alignmentFilter === 'all') return true;
+ if (alignmentFilter === 'alerts') return ['different','unlinked','ambiguous','retired'].includes(comparison.status);
+ return comparison.status === alignmentFilter;
+}
+
+const alignmentArchitectureRows = architectureFilteredRows;
+architectureFilteredRows = function () {
+ const rows = alignmentArchitectureRows();
+ if (alignmentRenderingMatrix || alignmentFilter === 'all') return rows;
+ const index = documentAlignmentIndex();
+ return rows.filter(flow => alignmentFilterMatches(procedureDocumentComparison(flow,index)));
+};
+
+function setAlignmentFilter(value) {
+ alignmentFilter = ALIGNMENT_FILTERS.some(([key]) => key === value) ? value : 'all';
+ updateDocumentAlignmentCells();
+ updateAlignmentClearButton();
+}
+
+const alignmentPoolFilterActive = poolFilterActive;
+poolFilterActive = function (type) {
+ return alignmentPoolFilterActive(type) || (type === 'architecture' && alignmentFilter !== 'all');
+};
+const alignmentClearPoolFilters = clearPoolFilters;
+clearPoolFilters = function (type) {
+ if (type === 'architecture') alignmentFilter = 'all';
+ alignmentClearPoolFilters(type);
+};
+
+function updateAlignmentClearButton() {
+ const clear = [...document.querySelectorAll('.poolArchitectureTools button')].find(button =>
+  /clearArchitectureFilters|clearPoolFilters/.test(button.getAttribute('onclick') || ''));
+ if (!clear) return;
+ const active = poolFilterActive('architecture');
+ clear.disabled = !active;
+ clear.classList.toggle('poolFiltersActive',active);
+}
 
 function alignmentName(value) {
  return String(value || '').normalize('NFC').trim().replace(/\s+/g,' ').toLocaleLowerCase('es');
@@ -52,7 +97,9 @@ function alignmentCellContent(flow,index) {
 const alignmentMatrixRenderer = renderBankMatrix;
 renderBankMatrix = function () {
  const template = document.createElement('template');
- template.innerHTML = alignmentMatrixRenderer();
+ alignmentRenderingMatrix = true;
+ try {template.innerHTML = alignmentMatrixRenderer();}
+ finally {alignmentRenderingMatrix = false;}
  const table = template.content.querySelector('table');
  if (!table) return template.innerHTML;
  const finalHeader = table.querySelector('th[data-matrix-key="procedureFinal"]');
@@ -84,15 +131,37 @@ renderBankMatrix = function () {
 function updateDocumentAlignmentCells() {
  const index = documentAlignmentIndex();
  const flows = new Map(architectureRows().map(flow => [flow.id,flow]));
+ let total = 0;
+ let visible = 0;
+ let unchecked = 0;
  for (const cell of document.querySelectorAll('[data-alignment-id]')) {
   const flow = flows.get(cell.dataset.alignmentId);
   const button = cell.querySelector('button');
   if (!flow || !button) continue;
   const comparison = procedureDocumentComparison(flow,index);
+  total++;
+  if (comparison.status === 'unchecked') unchecked++;
+  const show = alignmentFilterMatches(comparison);
+  cell.parentElement.hidden = !show;
+  cell.parentElement.style.display = show ? '' : 'none';
+  if (show) visible++;
   const icon = comparison.status === 'matched' ? '✓' : comparison.status === 'unchecked' ? '…' : '⚠';
   button.className = 'archSourceBadge '+(comparison.status === 'matched' ? 'matchOk' : 'matchWarn');
   button.textContent = icon+' '+comparison.label;
   button.setAttribute('aria-label',comparison.label+' con el Gestor Documental');
+ }
+ const count = document.getElementById('alignmentFilterCount');
+ if (count) count.textContent = `${visible} de ${total} filas`;
+ const table = document.querySelector('.bankMatrix');
+ if (!table) return;
+ table.querySelector('[data-alignment-empty]')?.remove();
+ if (total && !visible) {
+  const row = table.tBodies[0].insertRow();
+  row.dataset.alignmentEmpty = 'true';
+  const cell = row.insertCell();
+  cell.colSpan = table.tHead.rows[0].cells.length;
+  cell.className = 'emptyState';
+  cell.textContent = unchecked ? 'Hay filas sin comprobar. Pulsa Comprobar para consultar el Gestor.' : 'No hay filas que coincidan con este filtro de vínculo documental.';
  }
 }
 
@@ -117,6 +186,14 @@ async function refreshDocumentAlignment(force = false) {
 const alignmentBankView = renderBankView;
 renderBankView = function () {
  alignmentBankView();
+ const toolbar = document.querySelector('.poolArchitectureTools');
+ if (toolbar) toolbar.insertAdjacentHTML('beforeend',
+  `<label>Vínculo documental <select class="select" id="alignmentFilter" aria-label="Filtrar vínculo documental"
+   onchange="setAlignmentFilter(this.value)">${ALIGNMENT_FILTERS.map(([key,label]) =>
+    `<option value="${key}" ${alignmentFilter === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+   <span id="alignmentFilterCount" class="mini" role="status"></span>`);
+ updateDocumentAlignmentCells();
+ updateAlignmentClearButton();
  refreshDocumentAlignment();
 };
 const alignmentSetDraft = architectureMatrixSetDraft;
