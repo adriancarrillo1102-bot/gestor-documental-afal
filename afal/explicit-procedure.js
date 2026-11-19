@@ -20,6 +20,10 @@ confirmedMatrixUnifications = function () {
 };
 
 function procedureSelectionChanged(id, checked) {
+ if (isInactiveProcedure(state.flows.find(flow => flow.id === id))) {
+  procedureSelection.delete(id);
+  return;
+ }
  if (checked) procedureSelection.add(id);
  else procedureSelection.delete(id);
  const button = document.getElementById('explicitUnifyButton');
@@ -58,6 +62,7 @@ renderBankMatrix = function () {
   const cell = document.createElement('td');
   const check = document.createElement('input');
   check.type = 'checkbox';
+  check.disabled = isInactiveProcedure(state.flows.find(flow => flow.id === id));
   check.checked = procedureSelection.has(id);
   check.setAttribute('aria-label', 'Seleccionar procedimiento para unificar');
   check.setAttribute('onchange', 'procedureSelectionChanged(this.dataset.id,this.checked)');
@@ -83,6 +88,9 @@ function procedureOriginLabel(source) {
 }
 
 async function openExplicitProcedure(ids, mode) {
+ if (mode === 'unify' && ids.some(id => isInactiveProcedure(state.flows.find(flow => flow.id === id)))) {
+  return inputAlert('Los procedimientos inactivos se conservan como historial y no se pueden unificar.');
+ }
  if (architectureMatrixEditActive() && architectureMatrixRecount().cells) {
   return inputAlert('Guarda o descarta los cambios pendientes de la matriz antes de revisar esta operación.');
  }
