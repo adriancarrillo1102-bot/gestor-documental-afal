@@ -2,6 +2,19 @@
 let procedureFlowDraft = null;
 const procedureSelection = new Set();
 
+function clearProcedureSelection() {
+ procedureSelection.clear();
+ document.querySelectorAll('input[aria-label="Seleccionar procedimiento para unificar"]').forEach(input=>{input.checked=false;});
+ const button=document.getElementById('explicitUnifyButton');
+ if(button){button.disabled=true;button.textContent='Unificar procedimientos (0)';}
+ const clear=document.getElementById('explicitClearSelection');
+ if(clear)clear.disabled=true;
+}
+const originalProcedureBeginEdit=pool9BeginUnlocked;
+pool9BeginUnlocked=function(){if(!architectureMatrixEditActive())clearProcedureSelection();return originalProcedureBeginEdit();};
+const originalProcedureDiscardEdit=discardArchitectureMatrixEdit;
+discardArchitectureMatrixEdit=function(force=false){const result=originalProcedureDiscardEdit(force);if(!architectureMatrixEditActive()){clearProcedureSelection();procedureFlowDraft=null;}return result;};
+
 const originalConfirmedUnifications = confirmedMatrixUnifications;
 confirmedMatrixUnifications = function () {
  const groups = originalConfirmedUnifications();
@@ -22,6 +35,8 @@ confirmedMatrixUnifications = function () {
 function procedureSelectionChanged(id, checked) {
  if (checked) procedureSelection.add(id);
  else procedureSelection.delete(id);
+ const clear=document.getElementById('explicitClearSelection');
+ if(clear)clear.disabled=procedureSelection.size===0;
  const button = document.getElementById('explicitUnifyButton');
  if (button) {
   button.disabled = procedureSelection.size < 2;
@@ -35,7 +50,8 @@ architectureMatrixEditBar = function () {
  if (!architectureMatrixEditActive()) return bar;
  return bar + `<button class="btn" id="explicitUnifyButton" type="button"
   onclick="openExplicitProcedure([...procedureSelection],'unify')" ${procedureSelection.size < 2 ? 'disabled' : ''}>
-  Unificar procedimientos (${procedureSelection.size})</button>`;
+  Unificar procedimientos (${procedureSelection.size})</button>
+  <button class="btn" id="explicitClearSelection" type="button" onclick="clearProcedureSelection()" ${procedureSelection.size?'':'disabled'}>Limpiar selección</button>`;
 };
 
 const originalArchitectureMatrix = renderBankMatrix;

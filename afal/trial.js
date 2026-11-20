@@ -1,4 +1,5 @@
 import {config} from '../config.js';
+import {documentRegistrationDate,registrationOrigin} from '../historical-dates.js?v=20261102-1';
 
 const afalClient=window.supabase.createClient(config.url,config.publishableKey,{auth:{storageKey:"afal-module-session"}});
 const gestorClient=window.supabase.createClient(config.url,config.publishableKey);
@@ -40,6 +41,12 @@ async function openTrial(){
  window.afalOrganization=organization;
  const versions=new Map(edits.data.map(x=>[x.key,x.version]));
  window.afalTrialEdits=edits.data;
+ window.afalReadPortalReport=async()=>{
+  const {data,error}=await client.rpc('afal_report_document_catalog').abortSignal(AbortSignal.timeout(15000));
+  if(error)throw Error(error.message);
+  if(!Array.isArray(data?.documents)||!Array.isArray(data?.links))throw Error('Respuesta documental incompleta.');
+  return {...data,documents:data.documents.map(d=>({...d,registeredDate:documentRegistrationDate(d),dateOrigin:registrationOrigin(d)}))};
+ };
  window.afalReadDocumentCatalog=async()=>{
   const {data,error}=await client.rpc('afal_document_alignment_catalog').abortSignal(AbortSignal.timeout(15000));
   if(error)throw Error(error.message);
@@ -102,7 +109,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261119-comentarios-1';
+ frame.src='workspace.html?v=20261120-reportes-directos-1';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';
