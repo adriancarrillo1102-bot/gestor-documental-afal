@@ -114,7 +114,7 @@ renderBankMatrix = function () {
  column.dataset.colKey = '_documentAlignment';
  column.style.width = '170px';
  table.querySelector('colgroup').children[[...finalHeader.parentElement.children].indexOf(finalHeader)]?.after(column);
- const flowIndex = new Map(architectureRows().map(flow => [flow.id,flow]));
+ const flowIndex = new Map(architectureRows(true).map(flow => [flow.id,flow]));
  for (const cell of table.querySelectorAll('td[data-arch-cell="procedureFinal"]')) {
   const flow = flowIndex.get(cell.dataset.archRow);
   if (!flow) continue;
@@ -130,7 +130,7 @@ renderBankMatrix = function () {
 
 function updateDocumentAlignmentCells() {
  const index = documentAlignmentIndex();
- const flows = new Map(architectureRows().map(flow => [flow.id,flow]));
+ const flows = new Map(architectureRows(true).map(flow => [flow.id,flow]));
  let total = 0;
  let visible = 0;
  let unchecked = 0;
