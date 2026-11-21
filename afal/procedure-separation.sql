@@ -99,8 +99,11 @@ begin
   if not public.gd_is_admin() then raise exception 'Generar nomenclatura requiere acceso de administrador del Gestor. Puedes dejar el código pendiente.' using errcode='42501';end if;
   if not exists(select 1 from public.gd_macros where id=macro) or coalesce(p_request->>'emissionDate','') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then raise exception 'Selecciona el macroproceso y la fecha de emisión del nuevo registro' using errcode='PT422';end if;
   perform (p_request->>'emissionDate')::date;
+  if exists(select 1 from public.gd_documents where request_id=event_id) then raise exception 'La solicitud ya se utilizó en otro registro del Gestor. Abre una revisión nueva.' using errcode='PT409';end if;
   new_doc:=gd_private.register(macro,'PRO',final_name,jsonb_build_object('version','01','date',p_request->>'emissionDate','wave',case when p_request->>'wave' ~ '^(Ola )?[0-9]+$' then to_jsonb(regexp_replace(p_request->>'wave','^Ola ','')::integer) when lower(p_request->>'wave')='piloto' then to_jsonb('Piloto'::text) else 'null'::jsonb end,'notes','Separado de una unificación AFAL; carga pendiente'),event_id);
-  select code into final_code from public.gd_documents where id=new_doc;
+  select * into document from public.gd_documents where id=new_doc;
+  if document.name is distinct from final_name or document.macro is distinct from macro or document.type<>'PRO' or document.deleted_at is not null then raise exception 'La nomenclatura generada no coincide con la revisión' using errcode='PT409';end if;
+  final_code:=document.code;
  end if;
  if final_code<>'' and exists(select 1 from afal_import_trial.procedure_identity_rows() e where e.id<>source and e.code=final_code) then
   raise exception 'El código ya corresponde a otro procedimiento' using errcode='PT409';end if;
