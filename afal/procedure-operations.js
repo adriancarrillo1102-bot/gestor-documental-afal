@@ -11,7 +11,7 @@ function openProcedureUnifyPicker(id){
   const sources=group?architectureRows().filter(s=>confirmed.get(s.id)?.key===group.key):[f],m=ensureFlowMatrixMeta(representative);
   const row={id:representative.id,name:m.procedureFinal||m.procedureOriginal||f.name,code:m.procedureNumber||'Sin código',
    context:[m.macroFinal||m.macroOriginal,m.responsibleName].filter(Boolean).join(' · '),origins:sources.map(s=>ensureFlowMatrixMeta(s).procedureOriginal).join(' · ')};
-  row.search=normText([row.name,row.code,row.context,row.origins].join(' '));rows.push(row);
+  row.search=normText([row.name,row.code,row.context,row.origins,...sources.flatMap(source=>{const meta=ensureFlowMatrixMeta(source);return [meta.macroOriginal,meta.macroFinal,meta.responsibleName,meta.responsibleRole,meta.documenterName];})].join(' '));rows.push(row);
  }
  const initial=confirmed.get(id)?.destination.id||id;
  procedurePicker={rows:rows.sort((a,b)=>a.name.localeCompare(b.name,'es')),selected:new Set([initial])};
