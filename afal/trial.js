@@ -57,6 +57,14 @@ async function openTrial(){
  const procedureHistory=await client.rpc('afal_procedure_history');
  if(procedureHistory.error)throw Error(procedureHistory.error.message);
  window.afalProcedureHistory=procedureHistory.data;
+ const separations=await client.rpc('afal_separation_history');
+ if(separations.error)throw Error(separations.error.message);
+ window.afalSeparationHistory=separations.data;
+ window.afalSeparationPreview=async(sourceId,anchor)=>{
+  const {data,error}=await client.rpc('afal_separation_preview',{p_source:sourceId,p_anchor:anchor}).abortSignal(AbortSignal.timeout(15000));
+  if(error)throw Error(error.message);
+  return data;
+ };
  window.afalProcedurePreview=async ids=>{
   const {data,error}=await client.rpc('afal_procedure_preview',{p_ids:ids}).abortSignal(AbortSignal.timeout(15000));
   if(error)throw Error(error.message);
@@ -69,10 +77,11 @@ async function openTrial(){
  };
  const refreshIdentityState=async data=>{
   for(const [key,version] of Object.entries(data.versions||{}))versions.set(key,version);
-  const [latest,history]=await Promise.all([client.rpc('afal_trial_read_edits'),client.rpc('afal_procedure_history'),window.afalReadDocumentCatalog()]);
-  if(latest.error||history.error)throw Error('La operación se guardó. Recarga AFAL para consultar el resultado.');
+  const [latest,history,separations]=await Promise.all([client.rpc('afal_trial_read_edits'),client.rpc('afal_procedure_history'),client.rpc('afal_separation_history'),window.afalReadDocumentCatalog()]);
+  if(latest.error||history.error||separations.error)throw Error('La operación se guardó. Recarga AFAL para consultar el resultado.');
   window.afalTrialEdits=latest.data;
   window.afalProcedureHistory=history.data;
+  window.afalSeparationHistory=separations.data;
   for(const edit of latest.data)versions.set(edit.key,edit.version);
   return data;
  };
@@ -85,6 +94,12 @@ async function openTrial(){
  window.afalConfirmProcedure=async request=>{
   if(role==='viewer')throw Error('Tu cuenta tiene acceso de sólo lectura.');
   const {data,error}=await client.rpc('afal_confirm_procedure',{p_request:request}).abortSignal(AbortSignal.timeout(30000));
+  if(error)throw Error(error.message);
+  return refreshIdentityState(data);
+ };
+ window.afalConfirmSeparation=async request=>{
+  if(role==='viewer')throw Error('Tu cuenta tiene acceso de sólo lectura.');
+  const {data,error}=await client.rpc('afal_confirm_separation',{p_request:request}).abortSignal(AbortSignal.timeout(30000));
   if(error)throw Error(error.message);
   return refreshIdentityState(data);
  };
@@ -109,7 +124,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261120-reportes-directos-1';
+ frame.src='workspace.html?v=20261120-separacion-1';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';

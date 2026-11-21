@@ -43,7 +43,7 @@ function procedureSelectionChanged(id, checked) {
  if(clear)clear.disabled=procedureSelection.size===0;
  const button = document.getElementById('explicitUnifyButton');
  if (button) {
-  button.disabled = procedureSelection.size < 2;
+  button.disabled = procedureSelection.size < 1;
   button.textContent = `Unificar procedimientos (${procedureSelection.size})`;
  }
 }
@@ -53,7 +53,7 @@ architectureMatrixEditBar = function () {
  const bar = originalArchitectureEditBar();
  if (!architectureMatrixEditActive()) return bar;
  return bar + `<button class="btn" id="explicitUnifyButton" type="button"
-  onclick="openExplicitProcedure([...procedureSelection],'unify')" ${procedureSelection.size < 2 ? 'disabled' : ''}>
+  onclick="openSelectedProcedureUnification()" ${procedureSelection.size < 1 ? 'disabled' : ''}>
   Unificar procedimientos (${procedureSelection.size})</button>
   <button class="btn" id="explicitClearSelection" type="button" onclick="clearProcedureSelection()" ${procedureSelection.size?'':'disabled'}>Limpiar selección</button>`;
 };
