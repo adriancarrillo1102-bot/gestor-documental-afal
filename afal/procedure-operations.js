@@ -40,9 +40,9 @@ openUnifiedProcedure=function(group,edit=false){operationUnifiedCard(group,edit)
 const operationRecordCard=openArchitectureRecord;
 openArchitectureRecord=function(id,edit=false,origin=false){operationRecordCard(id,edit,origin);if(!edit&&!origin){const flow=state.flows.find(f=>f.id===id);if(flow&&!unifiedProcedure(flow)&&parent.afalCanEdit!==false)$('#modal .modalactions')?.insertAdjacentHTML('afterbegin','<button class="btn" data-id="'+esc(id)+'" onclick="openProcedureUnifyPicker(this.dataset.id)">Unificar con…</button>');appendProcedureSeparationHistory([id]);}};
 async function openProcedureSeparation(id){
- if(!procedureOperationCanStart())return;const flow=state.flows.find(f=>f.id===id),group=unifiedProcedure(flow);if(!group)return inputAlert('Este procedimiento no pertenece a una unificación confirmada.');
+ if(!procedureOperationCanStart())return;const flow=state.flows.find(f=>f.id===id),group=typeof procedureSeparationGroup==='function'?procedureSeparationGroup(id):unifiedProcedure(flow);if(!group)return inputAlert('Este procedimiento no pertenece a una unificación vigente.');
  openModal('<h3>Consultando unificación y documentos…</h3>');
- try{const preview=await parent.afalSeparationPreview(id,group.anchor.id);procedureSeparation={preview,group,sourceId:id,remainingAnchor:group.sources.find(f=>f.id!==id).id,requestId:crypto.randomUUID(),selectedDocuments:new Set()};showProcedureSeparation();}
+ try{const preview=await parent.afalSeparationPreview(id,group.anchor.id);group.sources=preview.ids.map(sourceId=>state.flows.find(f=>f.id===sourceId)).filter(Boolean);if(group.sources.length!==preview.ids.length)throw Error('Faltan orígenes en la copia local. Recarga AFAL antes de continuar.');procedureSeparation={preview,group,sourceId:id,remainingAnchor:group.sources.find(f=>f.id!==id).id,requestId:crypto.randomUUID(),selectedDocuments:new Set()};showProcedureSeparation();}
  catch(error){inputAlert('No se pudo preparar la separación. '+error.message);}
 }
 function separationOriginOptions(current,excluded=''){return procedureSeparation.group.sources.filter(f=>f.id!==excluded).map(f=>'<option value="'+esc(f.id)+'" '+(f.id===current?'selected':'')+'>'+esc(ensureFlowMatrixMeta(f).procedureOriginal||f.name)+'</option>').join('');}
