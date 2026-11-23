@@ -41,6 +41,13 @@ async function openTrial(){
  window.afalOrganization=organization;
  const versions=new Map(edits.data.map(x=>[x.key,x.version]));
  window.afalTrialEdits=edits.data;
+ window.afalReadInactivationLedger=async()=>{
+  const {data,error}=await client.rpc('afal_inactivation_ledger').abortSignal(AbortSignal.timeout(15000));
+  if(error)throw Error(error.message);
+  window.afalInactivationLedger=data;
+  return data;
+ };
+ await window.afalReadInactivationLedger();
  window.afalReadPortalReport=async()=>{
   const {data,error}=await client.rpc('afal_report_document_catalog').abortSignal(AbortSignal.timeout(15000));
   if(error)throw Error(error.message);
@@ -124,7 +131,7 @@ async function openTrial(){
  window.afalTrialSnapshot=snapshot;
  login.hidden=true;
  exit.hidden=false;
- frame.src='workspace.html?v=20261120-separacion-2';
+ frame.src='workspace.html?v=20261123-inactivos-1';
  frame.hidden=false;
  document.getElementById('account').hidden=false;
  document.getElementById('accounts').hidden=role!=='manager';
