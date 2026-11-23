@@ -1,8 +1,14 @@
 // Explicit final identities override historical display aliases; confirmed groups retain their shared key.
+let explicitIdentityEdits=null,explicitIdentityCount=-1,explicitIdentityIds=new Set();
+function hasExplicitFinalIdentity(id){
+ const edits=parent.afalTrialEdits;if(!Array.isArray(edits))return false;
+ if(edits!==explicitIdentityEdits||edits.length!==explicitIdentityCount){explicitIdentityEdits=edits;explicitIdentityCount=edits.length;explicitIdentityIds=new Set(edits.filter(e=>e.key.startsWith('matrix:')&&Object.prototype.hasOwnProperty.call(e.payload||{},'procedureFinal')).map(e=>e.key.slice(7)));}
+ return explicitIdentityIds.has(id);
+}
 const currentIdentityDocumentKey=implementationDocumentKey;
 implementationDocumentKey=function(flow,confirmed=confirmedMatrixUnifications()){
  if(confirmed.has(flow.id))return currentIdentityDocumentKey(flow,confirmed);
- const explicit=(parent.afalTrialEdits||[]).find(edit=>edit.key==='matrix:'+flow.id&&Object.prototype.hasOwnProperty.call(edit.payload||{},'procedureFinal'));
+ const explicit=hasExplicitFinalIdentity(flow.id);
  if(!explicit)return currentIdentityDocumentKey(flow,confirmed);
  const meta=ensureFlowMatrixMeta(flow);
  return 'current-identity:'+JSON.stringify([normText(meta.macroFinal||meta.macroOriginal),normText(meta.processFinal||meta.processOriginal),normText(meta.procedureNumber),normText(meta.procedureFinal||meta.procedureOriginal||flow.name)]);
